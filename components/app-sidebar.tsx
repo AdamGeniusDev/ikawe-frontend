@@ -24,7 +24,6 @@ import {
   CheckSquare,
   Database,
   PenTool,
-  BookOpen,
   Users,
   Settings,
   Search,
@@ -33,8 +32,8 @@ import {
   CheckCheck,
   ChevronRight,
   PlusCircle,
-  List,
   type LucideIcon,
+  BookOpen,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -55,7 +54,7 @@ const topMenuItems: MenuItemProps[] = [
 ]
 
 const datasetSubItems: MenuItemProps[] = [
-  { title: "Bibliothèques", icon: List,       url: "/datasets"     },
+  { title: "Bibliothèques", icon: BookOpen,       url: "/datasets"     },
   { title: "Ajouter",      icon: PlusCircle, url: "/datasets/upload" },
   { title: "Annoter",      icon: PenTool,    url: "/annotate"     },
 ]
