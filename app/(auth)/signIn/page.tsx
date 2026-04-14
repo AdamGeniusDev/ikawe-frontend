@@ -1,34 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { zodResolver } from "@hookform/resolvers/zod";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import Image from "next/image";
-
-
 
 const formSchema = z.object({
-  email: z.string().min(1, "L'adresse e-mail est requise.").email("Adresse e-mail invalide."),
+  email: z
+    .string()
+    .min(1, "L'adresse e-mail est requise.")
+    .email("Adresse e-mail invalide."),
   password: z.string().min(1, "Le mot de passe est requis."),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-
-
 export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const router = useRouter();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -42,8 +43,11 @@ export default function SignInPage() {
       setServerError(null);
       console.log(data);
       // appel API connexion
+      router.push("/dashboard");
     } catch (error) {
-      setServerError("Identifiants incorrects. Vérifiez votre e-mail et mot de passe.");
+      setServerError(
+        "Identifiants incorrects. Vérifiez votre e-mail et mot de passe.",
+      );
       console.error("Erreur lors de la connexion :", error);
     } finally {
       setIsLoading(false);
@@ -52,7 +56,6 @@ export default function SignInPage() {
 
   return (
     <div className="w-full max-w-[400px] flex flex-col gap-0">
-
       {/* Logo */}
       <div className="mb-8">
         <Link href="/" aria-label="Retour à l'accueil Ikawe">
@@ -71,7 +74,8 @@ export default function SignInPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold mb-1">Se connecter</h1>
         <p className="text-sm text-muted-foreground">
-          Quel plaisir de vous revoir ! Connectez-vous pour voir ce que vous avez manqué.
+          Quel plaisir de vous revoir ! Connectez-vous pour voir ce que vous
+          avez manqué.
         </p>
       </div>
 
@@ -92,7 +96,6 @@ export default function SignInPage() {
         aria-label="Formulaire de connexion"
       >
         <FieldGroup>
-
           {/* Email */}
           <Controller
             name="email"
@@ -105,7 +108,9 @@ export default function SignInPage() {
                   id={field.name}
                   type="email"
                   aria-invalid={fieldState.invalid}
-                  aria-describedby={fieldState.invalid ? `${field.name}-error` : undefined}
+                  aria-describedby={
+                    fieldState.invalid ? `${field.name}-error` : undefined
+                  }
                   placeholder="amara@example.com"
                 />
                 {fieldState.invalid && (
@@ -141,7 +146,9 @@ export default function SignInPage() {
                   id={field.name}
                   type="password"
                   aria-invalid={fieldState.invalid}
-                  aria-describedby={fieldState.invalid ? `${field.name}-error` : undefined}
+                  aria-describedby={
+                    fieldState.invalid ? `${field.name}-error` : undefined
+                  }
                   placeholder="••••••••"
                 />
                 {fieldState.invalid && (
@@ -154,10 +161,8 @@ export default function SignInPage() {
               </Field>
             )}
           />
-
         </FieldGroup>
 
-       
         <Button
           type="submit"
           disabled={isLoading}
