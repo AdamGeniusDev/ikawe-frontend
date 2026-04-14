@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState,useRef } from "react";
-import dynamic from "next/dynamic";
+import { Button } from "@/components/ui/button";
+import { WorldProps } from "@/components/ui/globe";
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
-import { Button } from "@/components/ui/button";
 import { Database } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
 
 // ─── Globe config ─────────────────────────────────────────────────────────────
 
@@ -43,33 +44,217 @@ const COLORS = [
 
 // ─── Arcs statiques — déclarés HORS du composant pour être stables ─────────────
 // Majorité partent/arrivent en Afrique pour renforcer le message "ancré en Afrique"
-const SAMPLE_ARCS = [
+const SAMPLE_ARCS: WorldProps["data"] = [
   // Rayonnement depuis l'Afrique de l'Ouest (hub principal)
-  { order: 1,  startLat: 14.6937,   startLng: -17.4441,  endLat: 48.8566,    endLng: 2.3522,    arcAlt: 0.4, color: "#C8963E" }, // Dakar → Paris
-  { order: 1,  startLat: 14.6937,   startLng: -17.4441,  endLat: 40.7128,    endLng: -74.006,   arcAlt: 0.5, color: "#E0AA55" }, // Dakar → New York
-  { order: 1,  startLat: 14.6937,   startLng: -17.4441,  endLat: 6.3703,     endLng: 2.3912,    arcAlt: 0.1, color: "#0D1F0F" }, // Dakar → Cotonou
-  { order: 2,  startLat: 6.5244,    startLng: 3.3792,    endLat: 51.5072,    endLng: -0.1276,   arcAlt: 0.35, color: "#C8963E" }, // Lagos → Londres
-  { order: 2,  startLat: 6.5244,    startLng: 3.3792,    endLat: 1.3521,     endLng: 103.8198,  arcAlt: 0.5, color: "#E0AA55" }, // Lagos → Singapour
-  { order: 2,  startLat: 6.5244,    startLng: 3.3792,    endLat: 14.6937,    endLng: -17.4441,  arcAlt: 0.1, color: "#1A3D1C" }, // Lagos → Dakar
-  { order: 3,  startLat: -1.2921,   startLng: 36.8219,   endLat: 28.6139,    endLng: 77.209,    arcAlt: 0.4, color: "#C8963E" }, // Nairobi → Delhi
-  { order: 3,  startLat: -1.2921,   startLng: 36.8219,   endLat: 35.6762,    endLng: 139.6503,  arcAlt: 0.5, color: "#E0AA55" }, // Nairobi → Tokyo
-  { order: 3,  startLat: -1.2921,   startLng: 36.8219,   endLat: 6.5244,     endLng: 3.3792,    arcAlt: 0.2, color: "#0D1F0F" }, // Nairobi → Lagos
-  { order: 4,  startLat: -25.7479,  startLng: 28.2293,   endLat: 34.0522,    endLng: -118.2437, arcAlt: 0.6, color: "#C8963E" }, // Pretoria → LA
-  { order: 4,  startLat: -25.7479,  startLng: 28.2293,   endLat: -1.2921,    endLng: 36.8219,   arcAlt: 0.25, color: "#1A3D1C" }, // Pretoria → Nairobi
-  { order: 4,  startLat: 3.848,     startLng: 11.5021,   endLat: 48.8566,    endLng: 2.3522,    arcAlt: 0.35, color: "#E0AA55" }, // Yaoundé → Paris
-  { order: 5,  startLat: 12.3647,   startLng: -1.5338,   endLat: 51.5072,    endLng: -0.1276,   arcAlt: 0.4, color: "#C8963E" }, // Ouaga → Londres
-  { order: 5,  startLat: 5.5600,    startLng: -0.2057,   endLat: 52.52,      endLng: 13.405,    arcAlt: 0.4, color: "#0D1F0F" }, // Accra → Berlin
-  { order: 5,  startLat: 18.0735,   startLng: -15.9582,  endLat: 14.6937,    endLng: -17.4441,  arcAlt: 0.05, color: "#1A3D1C" }, // Nouakchott → Dakar
+  {
+    order: 1,
+    startLat: 14.6937,
+    startLng: -17.4441,
+    endLat: 48.8566,
+    endLng: 2.3522,
+    arcAlt: 0.4,
+    color: "#C8963E",
+  }, // Dakar → Paris
+  {
+    order: 1,
+    startLat: 14.6937,
+    startLng: -17.4441,
+    endLat: 40.7128,
+    endLng: -74.006,
+    arcAlt: 0.5,
+    color: "#E0AA55",
+  }, // Dakar → New York
+  {
+    order: 1,
+    startLat: 14.6937,
+    startLng: -17.4441,
+    endLat: 6.3703,
+    endLng: 2.3912,
+    arcAlt: 0.1,
+    color: "#0D1F0F",
+  }, // Dakar → Cotonou
+  {
+    order: 2,
+    startLat: 6.5244,
+    startLng: 3.3792,
+    endLat: 51.5072,
+    endLng: -0.1276,
+    arcAlt: 0.35,
+    color: "#C8963E",
+  }, // Lagos → Londres
+  {
+    order: 2,
+    startLat: 6.5244,
+    startLng: 3.3792,
+    endLat: 1.3521,
+    endLng: 103.8198,
+    arcAlt: 0.5,
+    color: "#E0AA55",
+  }, // Lagos → Singapour
+  {
+    order: 2,
+    startLat: 6.5244,
+    startLng: 3.3792,
+    endLat: 14.6937,
+    endLng: -17.4441,
+    arcAlt: 0.1,
+    color: "#1A3D1C",
+  }, // Lagos → Dakar
+  {
+    order: 3,
+    startLat: -1.2921,
+    startLng: 36.8219,
+    endLat: 28.6139,
+    endLng: 77.209,
+    arcAlt: 0.4,
+    color: "#C8963E",
+  }, // Nairobi → Delhi
+  {
+    order: 3,
+    startLat: -1.2921,
+    startLng: 36.8219,
+    endLat: 35.6762,
+    endLng: 139.6503,
+    arcAlt: 0.5,
+    color: "#E0AA55",
+  }, // Nairobi → Tokyo
+  {
+    order: 3,
+    startLat: -1.2921,
+    startLng: 36.8219,
+    endLat: 6.5244,
+    endLng: 3.3792,
+    arcAlt: 0.2,
+    color: "#0D1F0F",
+  }, // Nairobi → Lagos
+  {
+    order: 4,
+    startLat: -25.7479,
+    startLng: 28.2293,
+    endLat: 34.0522,
+    endLng: -118.2437,
+    arcAlt: 0.6,
+    color: "#C8963E",
+  }, // Pretoria → LA
+  {
+    order: 4,
+    startLat: -25.7479,
+    startLng: 28.2293,
+    endLat: -1.2921,
+    endLng: 36.8219,
+    arcAlt: 0.25,
+    color: "#1A3D1C",
+  }, // Pretoria → Nairobi
+  {
+    order: 4,
+    startLat: 3.848,
+    startLng: 11.5021,
+    endLat: 48.8566,
+    endLng: 2.3522,
+    arcAlt: 0.35,
+    color: "#E0AA55",
+  }, // Yaoundé → Paris
+  {
+    order: 5,
+    startLat: 12.3647,
+    startLng: -1.5338,
+    endLat: 51.5072,
+    endLng: -0.1276,
+    arcAlt: 0.4,
+    color: "#C8963E",
+  }, // Ouaga → Londres
+  {
+    order: 5,
+    startLat: 5.56,
+    startLng: -0.2057,
+    endLat: 52.52,
+    endLng: 13.405,
+    arcAlt: 0.4,
+    color: "#0D1F0F",
+  }, // Accra → Berlin
+  {
+    order: 5,
+    startLat: 18.0735,
+    startLng: -15.9582,
+    endLat: 14.6937,
+    endLng: -17.4441,
+    arcAlt: 0.05,
+    color: "#1A3D1C",
+  }, // Nouakchott → Dakar
   // Connexions inter-africaines
-  { order: 6,  startLat: 33.9716,   startLng: -6.8498,   endLat: 6.5244,     endLng: 3.3792,    arcAlt: 0.2, color: "#C8963E" }, // Rabat → Lagos
-  { order: 6,  startLat: 30.0444,   startLng: 31.2357,   endLat: -1.2921,    endLng: 36.8219,   arcAlt: 0.2, color: "#E0AA55" }, // Le Caire → Nairobi
-  { order: 7,  startLat: 15.5007,   startLng: 32.5599,   endLat: 3.848,      endLng: 11.5021,   arcAlt: 0.15, color: "#0D1F0F" }, // Khartoum → Yaoundé
-  { order: 7,  startLat: -18.9249,  startLng: 47.5185,   endLat: -25.7479,   endLng: 28.2293,   arcAlt: 0.2, color: "#1A3D1C" }, // Antananarivo → Pretoria
+  {
+    order: 6,
+    startLat: 33.9716,
+    startLng: -6.8498,
+    endLat: 6.5244,
+    endLng: 3.3792,
+    arcAlt: 0.2,
+    color: "#C8963E",
+  }, // Rabat → Lagos
+  {
+    order: 6,
+    startLat: 30.0444,
+    startLng: 31.2357,
+    endLat: -1.2921,
+    endLng: 36.8219,
+    arcAlt: 0.2,
+    color: "#E0AA55",
+  }, // Le Caire → Nairobi
+  {
+    order: 7,
+    startLat: 15.5007,
+    startLng: 32.5599,
+    endLat: 3.848,
+    endLng: 11.5021,
+    arcAlt: 0.15,
+    color: "#0D1F0F",
+  }, // Khartoum → Yaoundé
+  {
+    order: 7,
+    startLat: -18.9249,
+    startLng: 47.5185,
+    endLat: -25.7479,
+    endLng: 28.2293,
+    arcAlt: 0.2,
+    color: "#1A3D1C",
+  }, // Antananarivo → Pretoria
   // Quelques liaisons monde→Afrique (données qui arrivent)
-  { order: 8,  startLat: 37.7749,   startLng: -122.4194, endLat: 14.6937,    endLng: -17.4441,  arcAlt: 0.55, color: "#E0AA55" }, // SF → Dakar
-  { order: 8,  startLat: 35.6762,   startLng: 139.6503,  endLat: 6.5244,     endLng: 3.3792,    arcAlt: 0.55, color: "#C8963E" }, // Tokyo → Lagos
-  { order: 9,  startLat: 22.3193,   startLng: 114.1694,  endLat: -1.2921,    endLng: 36.8219,   arcAlt: 0.5, color: "#E0AA55" }, // HK → Nairobi
-  { order: 9,  startLat: -33.8688,  startLng: 151.2093,  endLat: -25.7479,   endLng: 28.2293,   arcAlt: 0.45, color: "#C8963E" }, // Sydney → Pretoria
+  {
+    order: 8,
+    startLat: 37.7749,
+    startLng: -122.4194,
+    endLat: 14.6937,
+    endLng: -17.4441,
+    arcAlt: 0.55,
+    color: "#E0AA55",
+  }, // SF → Dakar
+  {
+    order: 8,
+    startLat: 35.6762,
+    startLng: 139.6503,
+    endLat: 6.5244,
+    endLng: 3.3792,
+    arcAlt: 0.55,
+    color: "#C8963E",
+  }, // Tokyo → Lagos
+  {
+    order: 9,
+    startLat: 22.3193,
+    startLng: 114.1694,
+    endLat: -1.2921,
+    endLng: 36.8219,
+    arcAlt: 0.5,
+    color: "#E0AA55",
+  }, // HK → Nairobi
+  {
+    order: 9,
+    startLat: -33.8688,
+    startLng: 151.2093,
+    endLat: -25.7479,
+    endLng: 28.2293,
+    arcAlt: 0.45,
+    color: "#C8963E",
+  }, // Sydney → Pretoria
 ] as const;
 
 // ─── Particles config — stable, définie hors composant ───────────────────────
@@ -92,7 +277,7 @@ const PARTICLES_OPTIONS = {
 // ─── Dynamic import SSR-safe ──────────────────────────────────────────────────
 const World = dynamic(
   () => import("@/components/ui/globe").then((m) => m.World),
-  { ssr: false }
+  { ssr: false },
 );
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -125,7 +310,6 @@ export default function HeroGlobe() {
       )}
 
       <div className="relative z-10 w-full max-w-7xl mx-auto px-6 pt-20 flex flex-col lg:flex-row items-center gap-12">
-
         {/* ── Colonne texte ── */}
         <div className="flex-1 flex flex-col items-start justify-center gap-6 pb-10">
           <span className="flex gap-3 text-sm font-semibold text-primary rounded-full shadow p-3">
@@ -167,15 +351,21 @@ export default function HeroGlobe() {
           {/* Stats */}
           <div className="flex items-center gap-8 mt-2 pt-6 border-t border-border w-full">
             <div>
-              <p className="text-2xl font-bold text-secondary dark:text-white">10k+</p>
+              <p className="text-2xl font-bold text-secondary dark:text-white">
+                10k+
+              </p>
               <p className="text-sm text-neutral-500">Contributeurs</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-secondary dark:text-white">50+</p>
+              <p className="text-2xl font-bold text-secondary dark:text-white">
+                50+
+              </p>
               <p className="text-sm text-neutral-500">Langues</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-secondary dark:text-white">1M+</p>
+              <p className="text-2xl font-bold text-secondary dark:text-white">
+                1M+
+              </p>
               <p className="text-sm text-neutral-500">Données collectées</p>
             </div>
           </div>
@@ -188,7 +378,8 @@ export default function HeroGlobe() {
           role="presentation"
         >
           <span className="sr-only">
-            Globe interactif illustrant les connexions de données à travers l'Afrique et le monde
+            Globe interactif illustrant les connexions de données à travers
+            l'Afrique et le monde
           </span>
           <div className="w-full max-w-[600px] aspect-square">
             <World data={SAMPLE_ARCS} globeConfig={globeConfig} />
