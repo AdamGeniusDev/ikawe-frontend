@@ -55,8 +55,8 @@ const topMenuItems: MenuItemProps[] = [
 
 const datasetSubItems: MenuItemProps[] = [
   { title: "Bibliothèques", icon: BookOpen,       url: "/datasets"     },
-  { title: "Ajouter",      icon: PlusCircle, url: "/datasets/upload" },
   { title: "Annoter",      icon: PenTool,    url: "/annotate"     },
+  { title: "Ajouter",      icon: PlusCircle, url: "/datasets/upload" },
 ]
 
 const bottomMenuItems: MenuItemProps[] = [
@@ -180,7 +180,7 @@ export function AppSidebar() {
                 }`}
               >
                 <span
-                  className={`mt-1.5 h-2 w-2 rounded-full flex-shrink-0 ${
+                  className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${
                     !n.read ? "bg-primary" : "bg-transparent"
                   }`}
                 />
@@ -209,7 +209,7 @@ export function AppSidebar() {
                 width={140}
                 height={40}
                 priority
-                className="h-auto w-[100px]"
+                className="h-auto w-25"
               />
             </Link>
             <p className="text-[12px] font-normal text-muted-foreground">
@@ -218,7 +218,7 @@ export function AppSidebar() {
           </div>
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex w-full items-center gap-2 bg-white hover:bg-white/60 px-3 py-2 rounded-md my-1 text-muted-foreground transition-colors"
+            className="flex w-full items-center gap-2 bg-muted/50 hover:bg-white border border-transparent hover:border-border px-3 py-2 rounded-md my-1 text-muted-foreground hover:text-foreground transition-all cursor-text"
           >
             <Search size={16} />
             <span className="text-sm">Rechercher…</span>
@@ -306,7 +306,7 @@ export function AppSidebar() {
             </div>
             <button
               onClick={() => setNotifOpen(true)}
-              className="relative flex-shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
+              className="relative shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
               aria-label="Notifications"
             >
               <Bell size={18} />
