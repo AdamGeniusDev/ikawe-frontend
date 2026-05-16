@@ -112,7 +112,6 @@ function JobCard({
     }
   }
 
-  }
 
   return (
     <div className={cn(
