@@ -24,6 +24,7 @@ import {
   MOCK_TEAMS, MOCK_PENDING, MOCK_ROLES,
   MOCK_DATASETS, MOCK_ALL_COLLABORATORS,
 } from "@/types/team"
+import { DatasetStatus } from "@/types/datasets"
 
 // ─── Types locaux ─────────────────────────────────────────────────────────────
 
@@ -295,10 +296,12 @@ function TeamDetailView({
     [team.datasetIds]
   )
 
-  const STATUS_CONFIG = {
-    active:    { label: "Actif",    color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
-    completed: { label: "Terminé",  color: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"              },
-    paused:    { label: "En pause", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"       },
+    const STATUS_CONFIG: Record<DatasetStatus, { label: string; color: string }> = {
+    active:    { label: 'Actif',       color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    completed: { label: 'Terminé',     color: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'               },
+    draft:     { label: 'Brouillon',   color: 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'               },
+    in_review: { label: 'En révision', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'           },
+    archived:  { label: 'Archivé',     color: 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'               },
   }
 
   return (

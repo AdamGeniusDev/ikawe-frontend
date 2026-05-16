@@ -117,7 +117,7 @@ export interface Dataset {
 
   // ── Cycle de vie ────────────────────────────────────────────────────────────
   status:       DatasetStatus
-  createdAt:    string
-  updatedAt:    string
-  completedAt?: string   // optionnel : rempli quand status passe à 'completed'
+  createdAt:    Date
+  updatedAt:    Date
+  completedAt?: Date   // optionnel : rempli quand status passe à 'completed'
 }

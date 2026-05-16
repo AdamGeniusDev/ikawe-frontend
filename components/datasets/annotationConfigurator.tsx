@@ -34,7 +34,7 @@ export interface AnnotationLabel {
   color: string
 }
 
-// AnnotationConfig N'A PLUS de champ assignment.
+// AnnotationConfig n'a plus de champ assignment.
 // L'assignation vit dans JobAssignmentConfig (étape 4).
 export interface AnnotationConfig {
   taskType:      AnnotationTaskType

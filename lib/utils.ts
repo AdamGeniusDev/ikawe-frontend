@@ -5,9 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const formatDate = (date: Date): string => {
+export const formatDate = (date: Date | string): string => {
+  const d = typeof date === 'string' ? new Date(date) : date
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
+  const diffMs = now.getTime() - d.getTime()
   const diffMinutes = Math.floor(diffMs / (1000 * 60))
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
 
@@ -17,10 +18,10 @@ export const formatDate = (date: Date): string => {
   if (diffHours < 48) return 'Hier'
   if (diffHours < 72) return 'Avant-hier'
 
-  return date.toLocaleDateString('fr-FR', {
+  return d.toLocaleDateString('fr-FR', {
     day: 'numeric',
     month: 'short',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
   })
 }
 

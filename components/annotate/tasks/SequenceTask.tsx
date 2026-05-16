@@ -130,7 +130,7 @@ export default function SequenceTask({
                   className={cn('w-3 h-3 rounded-full shrink-0', (isActive || isPending) && 'ring-2 ring-offset-1')}
                   style={{
                     backgroundColor: label.color,
-                    ringColor: label.color,
+                    outlineColor: label.color,
                   }}
                 />
                 <span

@@ -6,7 +6,7 @@ const PUBLIC_ROUTES = ['/', '/login', '/signUp']
 // Routes réservées aux non-connectés
 const AUTH_ROUTES = ['/login', '/signUp']
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get('token')?.value
 
@@ -14,9 +14,9 @@ export function middleware(request: NextRequest) {
   const isAuth   = AUTH_ROUTES.some(r => pathname.startsWith(r))
 
   // Pas de token + page privée → login
-  if (!token && !isPublic) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
+//   if (!token && !isPublic) {
+//     return NextResponse.redirect(new URL('/login', request.url))
+//   }
 
   // Connecté + tente d'aller sur login ou signUp → dashboard
   if (token && isAuth) {

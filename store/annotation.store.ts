@@ -293,7 +293,7 @@ export const useAnnotationStore = create<AnnotationState & AnnotationActions>()(
     const element = session.elements[currentIdx]
     if (!element) return
 
-    const appliedLabels: AppliedLabel[] = (() => {
+   const appliedLabels: AppliedLabel[] = (() => {
       switch (session.taskType) {
         case 'classification':
           return selectedLabelIds.map((labelId) => ({ labelId }))
@@ -309,6 +309,8 @@ export const useAnnotationStore = create<AnnotationState & AnnotationActions>()(
           }))
         case 'transcription':
           return [{ labelId: '', transcription: transcriptionValue }]
+        default:
+          return []
       }
     })()
 

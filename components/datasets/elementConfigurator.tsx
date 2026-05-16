@@ -251,7 +251,7 @@ export function ElementConfigurator({ dataset, onConfigChange, className }: Elem
   const { id, dataType, totalFiles, annotatedFiles, title } = dataset
 
   const elements = useMemo(
-    () => generateMockElements(id, dataType, totalFiles, annotatedFiles),
+    () => generateMockElements(id, dataType, totalFiles, annotatedFiles ?? 0),
     [id, dataType, totalFiles, annotatedFiles]
   )
 
