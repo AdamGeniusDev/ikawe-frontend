@@ -44,3 +44,21 @@ export const simulateZipAnalysis = (
     .slice(0, ignoredCount > 0 ? 2 : 0)
   return { detectedCount, ignoredCount, ignoredExtensions }
 }
+export function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`
+  return String(n)
+}
+
+export function generateUsername(fullName: string): string {
+  const base = fullName
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")                    
+    .replace(/[\u0300-\u036f]/g, "")    
+    .replace(/[^a-z0-9\s]/g, "")       
+    .replace(/\s+/g, "_")         
+
+  const suffix = Math.floor(Math.random() * 9000 + 1000)
+  return `${base}_${suffix}`
+}

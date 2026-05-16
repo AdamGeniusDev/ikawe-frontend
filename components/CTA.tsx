@@ -32,7 +32,7 @@ export default function CTA() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="px-8 py-6 text-base border-primary/40 text-primary hover:bg-primary/10"
+                  className="px-8 py-6 text-base  border-white  bg-transparent text-white hover:bg-white"
                   aria-label="Voir la documentation"
                 >
                   Voir la documentation

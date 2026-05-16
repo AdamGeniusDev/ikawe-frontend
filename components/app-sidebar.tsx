@@ -60,7 +60,7 @@ const datasetSubItems: MenuItemProps[] = [
 ]
 
 const bottomMenuItems: MenuItemProps[] = [
-  { title: "Collaborateurs", icon: Users,    url: "/collaborators" },
+  { title: "Equipes", icon: Users,    url: "/team" },
   { title: "Paramètres",     icon: Settings, url: "/settings"      },
 ]
 

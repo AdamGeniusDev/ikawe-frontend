@@ -3,7 +3,7 @@
 import {
   Dataset, DatasetMember, LabelDefinition,
 } from "@/types/datasets"
-import { AnnotationSession } from "@/types/annotation-session"
+import { AnnotationSession } from "@/types/annotation"
 
 
 // On importe les types qu'on va aussi mocker

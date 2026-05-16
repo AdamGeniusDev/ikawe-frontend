@@ -1,61 +1,81 @@
-"use client";
+"use client"
 
-import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { zodResolver } from "@hookform/resolvers/zod";
-import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import * as z from "zod";
+import { useState } from "react"
+import Link from "next/link"
+import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { useForm, Controller } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { SSOGroup, type SSOProvider } from "@/components/auth/SSOButton"
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
 const formSchema = z.object({
   email: z
     .string()
     .min(1, "L'adresse e-mail est requise.")
     .email("Adresse e-mail invalide."),
-  password: z.string().min(1, "Le mot de passe est requis."),
-});
+  password: z
+    .string()
+    .min(1, "Le mot de passe est requis."),
+})
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.infer<typeof formSchema>
 
-export default function SignInPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const router = useRouter();
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function LoginPage() {
+  const [isLoading,   setIsLoading]   = useState(false)
+  const [ssoLoading,  setSSOLoading]  = useState<SSOProvider | null>(null)
+  const [serverError, setServerError] = useState<string | null>(null)
+  const router = useRouter()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { email: "", password: "" },
     mode: "onTouched",
-  });
+  })
 
+  // ── Connexion email / password ──────────────────────────────────────────────
   const onSubmit = async (data: FormValues) => {
     try {
-      setIsLoading(true);
-      setServerError(null);
-      console.log(data);
-      // appel API connexion
-      router.push("/dashboard");
+      setIsLoading(true)
+      setServerError(null)
+      console.log(data)
+      // Appel api pour la connexion directe
+      router.push("/dashboard")
     } catch (error) {
-      setServerError(
-        "Identifiants incorrects. Vérifiez votre e-mail et mot de passe.",
-      );
-      console.error("Erreur lors de la connexion :", error);
+      setServerError("Identifiants incorrects. Vérifiez votre e-mail et mot de passe.")
+      console.error("Erreur de connexion :", error)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
+
+  // ── Connexion SSO ───────────────────────────────────────────────────────────
+  const handleSSO = async (provider: SSOProvider) => {
+    try {
+      setSSOLoading(provider)
+      setServerError(null)
+      // Appel APi pour la connexion via le provier
+      console.log(`SSO ${provider}`)
+    } catch (error) {
+      setServerError(`Impossible de se connecter avec ${provider}. Réessayez.`)
+      console.error(`Erreur SSO ${provider} :`, error)
+    } finally {
+      setSSOLoading(null)
+    }
+  }
+
+  const anyLoading = isLoading || ssoLoading !== null
 
   return (
-    <div className="w-full max-w-[400px] flex flex-col gap-0">
+    <div className="w-full max-w-125 flex flex-col">
+
       {/* Logo */}
       <div className="mb-8">
         <Link href="/" aria-label="Retour à l'accueil Ikawe">
@@ -65,7 +85,7 @@ export default function SignInPage() {
             width={140}
             height={40}
             priority
-            className="h-auto w-[140px]"
+            className="h-auto w-35"
           />
         </Link>
       </div>
@@ -74,8 +94,7 @@ export default function SignInPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold mb-1">Se connecter</h1>
         <p className="text-sm text-muted-foreground">
-          Quel plaisir de vous revoir ! Connectez-vous pour voir ce que vous
-          avez manqué.
+          Quel plaisir de vous revoir ! Connectez-vous pour voir ce que vous avez manqué.
         </p>
       </div>
 
@@ -89,6 +108,14 @@ export default function SignInPage() {
         </div>
       )}
 
+      {/* SSO — chemin le plus rapide, affiché en premier */}
+      <SSOGroup
+        onSSO={handleSSO}
+        disabled={anyLoading}
+        separator="ou continuez avec votre e-mail"
+      />
+
+      {/* Formulaire email / password */}
       <form
         id="sign-in"
         onSubmit={form.handleSubmit(onSubmit)}
@@ -96,6 +123,7 @@ export default function SignInPage() {
         aria-label="Formulaire de connexion"
       >
         <FieldGroup>
+
           {/* Email */}
           <Controller
             name="email"
@@ -107,11 +135,11 @@ export default function SignInPage() {
                   {...field}
                   id={field.name}
                   type="email"
-                  aria-invalid={fieldState.invalid}
-                  aria-describedby={
-                    fieldState.invalid ? `${field.name}-error` : undefined
-                  }
                   placeholder="amara@example.com"
+                  autoComplete="email"
+                  aria-invalid={fieldState.invalid}
+                  aria-describedby={fieldState.invalid ? `${field.name}-error` : undefined}
+                  disabled={anyLoading}
                 />
                 {fieldState.invalid && (
                   <FieldError
@@ -136,7 +164,6 @@ export default function SignInPage() {
                     href="/auth/forgot-password"
                     className="text-xs text-muted-foreground hover:underline"
                     style={{ color: "#C8963E" }}
-                    tabIndex={0}
                   >
                     Mot de passe oublié ?
                   </Link>
@@ -145,11 +172,11 @@ export default function SignInPage() {
                   {...field}
                   id={field.name}
                   type="password"
-                  aria-invalid={fieldState.invalid}
-                  aria-describedby={
-                    fieldState.invalid ? `${field.name}-error` : undefined
-                  }
                   placeholder="••••••••"
+                  autoComplete="current-password"
+                  aria-invalid={fieldState.invalid}
+                  aria-describedby={fieldState.invalid ? `${field.name}-error` : undefined}
+                  disabled={anyLoading}
                 />
                 {fieldState.invalid && (
                   <FieldError
@@ -161,11 +188,12 @@ export default function SignInPage() {
               </Field>
             )}
           />
+
         </FieldGroup>
 
         <Button
           type="submit"
-          disabled={isLoading}
+          disabled={anyLoading}
           aria-label="Se connecter"
           className="w-full bg-primary hover:bg-secondary text-white h-11 mt-6"
         >
@@ -176,13 +204,14 @@ export default function SignInPage() {
       <p className="text-center text-sm text-muted-foreground mt-6">
         Pas encore de compte ?{" "}
         <Link
-          href="/auth/sign-up"
+          href="/signUp"
           className="font-medium hover:underline"
           style={{ color: "#C8963E" }}
         >
           S'inscrire
         </Link>
       </p>
+
     </div>
-  );
+  )
 }

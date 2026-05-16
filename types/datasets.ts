@@ -1,90 +1,123 @@
-// types/dataset.ts
+// types/datasets.ts
+// SOURCE DE VÉRITÉ — DataType, Dataset et tout ce qui concerne les datasets.
+
 
 export type DataType =
   | 'image'
   | 'text'
   | 'audio'
-  | 'video'
   | 'csv'
   | 'json'
 
+export const DATA_TYPE_LABELS: Record<DataType, string> = {
+  image: 'Image',
+  text:  'Texte',
+  audio: 'Audio',
+  csv:   'CSV',
+  json:  'JSON',
+}
+
+
+
 export type TaskType =
   | 'classification'
-  | 'object_detection'
-  | 'segmentation'
-  | 'ner'
+  | 'bounding_box'
   | 'transcription'
-  | 'sentiment'
+  | 'sequence'
+  | 'captioning'
+
+export const TASK_TYPE_LABELS: Record<TaskType, string> = {
+  classification: 'Classification',
+  bounding_box:   'Bounding Box',
+  transcription:  'Transcription',
+  sequence:       'NER / Séquence',
+  captioning:     'Captioning',
+}
+
+// ─── Statuts ──────────────────────────────────────────────────────────────────
+// draft      → dataset uploadé, pas encore configuré (titre, description manquants)
+// active     → configuré, prêt à recevoir des jobs d'annotation
+// in_review  → en cours de révision finale
+// completed  → tous les jobs sont terminés
+// archived   → plus utilisé, conservé pour référence
 
 export type DatasetStatus =
-  | 'draft'        // créé mais pas encore prêt
-  | 'active'       // annotation en cours
-  | 'in_review'    // soumis pour révision
-  | 'completed'    // 100% annoté et validé
-  | 'archived'     // désactivé
+  | 'draft'
+  | 'active'
+  | 'in_review'
+  | 'completed'
+  | 'archived'
 
 export type DatasetVisibility = 'private' | 'team' | 'public'
 
+// ─── Rôles dataset ────────────────────────────────────────────────────────────
+// Droits d'un membre sur ce dataset spécifiquement.
+// Distinct des Permission dans team.ts qui sont des droits globaux dans l'équipe.
+
 export type DatasetRole =
-  | 'viewer'      // peut voir, télécharger
-  | 'annotator'   // peut annoter
-  | 'reviewer'    // peut valider/rejeter les annotations
-  | 'admin'       // peut tout faire sur ce dataset
+  | 'viewer'
+  | 'annotator'
+  | 'reviewer'
+  | 'admin'
+
+// ─── Membres & accès ──────────────────────────────────────────────────────────
 
 export interface DatasetMember {
-  userId: string
-  role: DatasetRole
-  grantedAt: Date
-  grantedBy: string    // userId de celui qui a octroyé l'accès
-  expiresAt?: Date     // accès temporaire possible
+  userId:     string
+  name:       string
+  avatarUrl?: string
+  role:       DatasetRole
+  grantedAt:  string
+  grantedBy:  string
+  expiresAt?: string
 }
 
-export interface LabelDefinition {
-  id: string
-  name: string
-  color: string        // hex, pour l'éditeur
-  description?: string
-  shortcut?: string    // raccourci clavier, ex: "E" pour Écran
+export interface TeamAssignment {
+  teamId:     string
+  teamName:   string
+  assignedAt: string
+  assignedBy: string
+  memberRoleOverrides?: Record<string, DatasetRole>
 }
+
+
 
 export interface Dataset {
-  // ── Identité ──────────────────────────────
-  id: string
-  title: string
-  description: string
-  tags: string[]
-  language?: string          // ex: "fr", "fon", "yo", "wo"
-  version: string            // convention : "1.0.0"
+  // ── Identité ────────────────────────────────────────────────────────────────
+  id:           string
+  title:        string        // commence avec le nom du fichier uploadé, puis renommé
+  description?: string        // optionnel : rempli à la configuration
+  tags:         string[]
+  language?:    string
+  version:      string        // ex: "1.0", "2.3"
 
-  // ── Propriété & accès ─────────────────────
-  ownerId: string            // userId du créateur
-  visibility: DatasetVisibility
-  price: number              // 0 = gratuit, >0 = payant (en FCFA)
+  // ── Propriété & accès ───────────────────────────────────────────────────────
+  ownerId:    string
+  visibility: DatasetVisibility   // défaut: 'private' à l'upload
+  price:      number              // défaut: 0, rempli à la publication
 
-  // ── Type & tâche ──────────────────────────
+  // ── Type de données (détecté automatiquement à l'upload) ────────────────────
   dataType: DataType
-  taskType: TaskType
 
-  // ── Fichiers & taille ─────────────────────
+  // ── Fichiers (connus dès l'upload) ──────────────────────────────────────────
   totalFiles: number
-  annotatedFiles: number     // pour calculer la progression
-  sizeMb: number
+  sizeMb:     number
 
-  // ── Labels ────────────────────────────────
-  labelSchema: LabelDefinition[]
+  // ── Stats calculées depuis les jobs (optionnelles avant création d'un job) ──
+  annotatedFiles?:    number   // somme des éléments annotés sur tous les jobs
+  annotationProgress?: number  // pourcentage global, calculé côté backend
+  taskCount?:         number   // nombre de jobs créés sur ce dataset
+  downloadCount?:     number
+  likeCount?:         number
+  isLikedByCurrentUser?: boolean
 
-  // ── Statistiques d'annotation ─────────────
-  taskCount: number          // nb de tâches liées
-  /** Calculé : annotatedFiles / totalFiles * 100 — utile en cache */
-  annotationProgress: number
+  // ── Membres & équipes ───────────────────────────────────────────────────────
+  members:         DatasetMember[]
+  teamAssignments: TeamAssignment[]
 
-  //Liste des acces explicite
-
-  members: DatasetMember[]
-
-  // ── Statut & dates ────────────────────────
-  status: DatasetStatus
-  createdAt: Date
-  updatedAt: Date
-  completedAt?: Date         // null tant que pas terminé
+  // ── Cycle de vie ────────────────────────────────────────────────────────────
+  status:       DatasetStatus
+  createdAt:    string
+  updatedAt:    string
+  completedAt?: string   // optionnel : rempli quand status passe à 'completed'
 }

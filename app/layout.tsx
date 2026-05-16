@@ -25,6 +25,7 @@ export default function RootLayout({
     <html lang="en" className={ubuntu.variable}>
       <body
         className={` antialiased`}
+        suppressHydrationWarning
       >
         <Providers>
           {children}
