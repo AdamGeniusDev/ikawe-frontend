@@ -11,9 +11,10 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  MOCK_JOBS, MOCK_USERS,
+  MOCK_JOBS,
   getBatchesForJob, canAccessBatch,
 } from '@/constants/mock-data-annotate'
+import { MOCK_USERS } from '@/types/user' 
 import type { AnnotationBatch, BatchStatus } from '@/types/annotation'
 
 const CURRENT_USER = MOCK_USERS[0]

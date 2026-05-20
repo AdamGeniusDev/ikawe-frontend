@@ -1,27 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Routes accessibles sans token
 const PUBLIC_ROUTES = ['/', '/login', '/signUp']
-
-// Routes réservées aux non-connectés
-const AUTH_ROUTES = ['/login', '/signUp']
+const AUTH_ROUTES   = ['/login', '/signUp']
+const LANDING_ROUTE = '/'
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get('token')?.value
 
-  const isPublic = PUBLIC_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))
-  const isAuth   = AUTH_ROUTES.some(r => pathname.startsWith(r))
+  const isPublic  = PUBLIC_ROUTES.some(r => pathname === r || pathname.startsWith(r + '/'))
+  const isAuth    = AUTH_ROUTES.some(r => pathname.startsWith(r))
+  const isLanding = pathname === '/'
 
-  // Pas de token + page privée → login
-//   if (!token && !isPublic) {
-//     return NextResponse.redirect(new URL('/login', request.url))
-//   }
+  // Connecté + landing page → dashboard directement
+  if (token && isLanding) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
 
-  // Connecté + tente d'aller sur login ou signUp → dashboard
+  // Connecté + tente login/signUp → dashboard
   if (token && isAuth) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
+
+  // // Pas connecté + page privée → login
+  // if (!token && !isPublic) {
+  //   return NextResponse.redirect(new URL('/login', request.url))
+  // }
 
   return NextResponse.next()
 }

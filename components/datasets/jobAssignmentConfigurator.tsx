@@ -1,8 +1,9 @@
 "use client"
 
 // components/datasets/jobAssignmentConfigurator.tsx
-// Sources : MOCK_USERS + MOCK_TEAMS depuis @/constants/mock-data (IDs "usr_xxx")
-// PAS d'import depuis @/types/team (IDs incompatibles "c1, c2...")
+// Correction : le useEffect qui appelait setDrafts() est supprimé.
+// Les drafts sont réinitialisés via key={includedCount} sur le composant parent.
+// Voir annotate/new/page.tsx : <JobAssignmentConfigurator key={includedCount} ... />
 
 import { useState, useEffect, useCallback } from "react"
 import {
@@ -50,7 +51,13 @@ function draftIsValid(d: BatchDraft): boolean {
   return d.selfIncluded || !!d.teamId || d.userIds.length > 0
 }
 
-// ─── DistributionToggle ───────────────────────
+function makeDrafts(count: number): BatchDraft[] {
+  return Array.from({ length: count }, (_, i) => ({
+    batchIndex: i + 1, teamId: null, userIds: [], selfIncluded: true,
+  }))
+}
+
+// ─── DistributionToggle ───────────────────────────────────────────────────────
 
 function DistributionToggle({ value, onChange }: {
   value: DistributionMode; onChange: (v: DistributionMode) => void
@@ -73,7 +80,7 @@ function DistributionToggle({ value, onChange }: {
   )
 }
 
-// ─── BatchAssignCard ──────────────────────────
+// ─── BatchAssignCard ──────────────────────────────────────────────────────────
 
 function BatchAssignCard({
   draft, batchCount, teams, collaborators, currentUser, onChange,
@@ -236,7 +243,8 @@ function BatchAssignCard({
   )
 }
 
-// ─── COMPOSANT PRINCIPAL ──────────────────────
+// ─── Composant principal ──────────────────────────────────────────────────────
+
 
 export function JobAssignmentConfigurator({
   dataset, elementConfigs, currentUserId, onConfigChange, className,
@@ -245,7 +253,6 @@ export function JobAssignmentConfigurator({
   const batchCount    = Math.max(1, Math.ceil(includedCount / BATCH_SIZE))
   const lastBatchSize = includedCount % BATCH_SIZE || BATCH_SIZE
 
-  // Membres du dataset (IDs "usr_xxx") → résoudre depuis MOCK_USERS
   const datasetMemberIds = dataset.members.map(m => m.userId)
   const collaborators    = MOCK_USERS.filter(
     u => datasetMemberIds.includes(u.id) && u.id !== currentUserId
@@ -256,22 +263,17 @@ export function JobAssignmentConfigurator({
   const currentUser = getUserById(currentUserId) ?? MOCK_USERS[0]
 
   const [distributionMode, setDistributionMode] = useState<DistributionMode>("sequential")
-  const [drafts, setDrafts] = useState<BatchDraft[]>(() =>
-    Array.from({ length: batchCount }, (_, i) => ({
-      batchIndex: i + 1, teamId: null, userIds: [], selfIncluded: true,
-    }))
-  )
 
-  useEffect(() => {
-    setDrafts(Array.from({ length: batchCount }, (_, i) => ({
-      batchIndex: i + 1, teamId: null, userIds: [], selfIncluded: true,
-    })))
-  }, [batchCount])
+  // Initialisé une seule fois au montage — pas de useEffect de réinit.
+  // Si batchCount change (l'utilisateur modifie sa sélection d'éléments),
+  // le composant est recréé via key={includedCount} dans la page parent.
+  const [drafts, setDrafts] = useState<BatchDraft[]>(() => makeDrafts(batchCount))
 
   const updateDraft = useCallback((updated: BatchDraft) => {
     setDrafts(prev => prev.map(d => d.batchIndex === updated.batchIndex ? updated : d))
   }, [])
 
+  // Remonte la config au parent — dans un callback d'effet, pas setState
   useEffect(() => {
     if (!drafts.every(draftIsValid)) { onConfigChange(null); return }
     onConfigChange({

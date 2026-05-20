@@ -1,32 +1,18 @@
 "use client"
 
 // components/datasets/annotationConfigurator.tsx
-// Section "Qui annote" SUPPRIMÉE — déplacée dans JobAssignmentConfigurator (étape 4).
-// Contenu : Tâche + Labels + Options uniquement.
-// AnnotationConfig n'a plus de champ "assignment".
+
 
 import { useEffect, useState, useCallback } from "react"
 import {
   Tag, Plus, X, Info, BoxSelect, Fingerprint,
-  MessageSquareText, Mic, BarChart2,
-  ChevronRight, ToggleLeft,
+  Mic, ChevronRight, ToggleLeft, FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Dataset } from "@/types/datasets"
+import { Dataset, TaskType } from "@/types/datasets"
 import { ElementConfig } from "@/components/datasets/elementConfigurator"
 
-// ─────────────────────────────────────────────
-// TYPES EXPORTÉS
-// ─────────────────────────────────────────────
-
-export type AnnotationTaskType =
-  | "classification"
-  | "bounding_box"
-  | "segmentation"
-  | "ner"
-  | "sentiment"
-  | "transcription"
-  | "captioning"
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AnnotationLabel {
   id:    string
@@ -34,14 +20,13 @@ export interface AnnotationLabel {
   color: string
 }
 
-// AnnotationConfig n'a plus de champ assignment.
-// L'assignation vit dans JobAssignmentConfig (étape 4).
 export interface AnnotationConfig {
-  taskType:      AnnotationTaskType
+  taskType:      TaskType
   taskName:      string
   labels:        AnnotationLabel[]
   allowMultiple: boolean
   allowSkip:     boolean
+  instructions?: string   
 }
 
 export interface AnnotationConfiguratorProps {
@@ -51,12 +36,10 @@ export interface AnnotationConfiguratorProps {
   className?:      string
 }
 
-// ─────────────────────────────────────────────
-// TÂCHES PAR TYPE DE DATASET
-// ─────────────────────────────────────────────
+// ─── Tâches par type de dataset ───────────────────────────────────────────────
 
 interface TaskDefinition {
-  type:        AnnotationTaskType
+  type:        TaskType
   label:       string
   description: string
   icon:        React.ReactNode
@@ -65,35 +48,27 @@ interface TaskDefinition {
 
 const TASKS_BY_TYPE: Record<string, TaskDefinition[]> = {
   image: [
-    { type: "classification", label: "Classification", description: "Attribuer une catégorie à chaque image",        icon: <Tag             className="h-4 w-4" />, needsLabels: true  },
-    { type: "bounding_box",   label: "Bounding Box",   description: "Délimiter des objets par des rectangles",       icon: <BoxSelect       className="h-4 w-4" />, needsLabels: true  },
-    { type: "captioning",     label: "Captioning",     description: "Rédiger une description textuelle de l'image",  icon: <MessageSquareText className="h-4 w-4" />, needsLabels: false },
+    { type: "classification", label: "Classification", description: "Attribuer une catégorie à chaque image",       icon: <Tag       className="h-4 w-4" />, needsLabels: true  },
+    { type: "bounding_box",   label: "Bounding Box",   description: "Délimiter des objets par des rectangles",      icon: <BoxSelect className="h-4 w-4" />, needsLabels: true  },
+    { type: "transcription",  label: "Transcription",  description: "Rédiger une description textuelle de l'image", icon: <Mic       className="h-4 w-4" />, needsLabels: false },
   ],
   audio: [
-    { type: "transcription",  label: "Transcription",  description: "Retranscrire le contenu audio en texte",        icon: <Mic             className="h-4 w-4" />, needsLabels: false },
-    { type: "classification", label: "Classification", description: "Catégoriser chaque fichier audio",              icon: <Tag             className="h-4 w-4" />, needsLabels: true  },
-    { type: "sentiment",      label: "Sentiment",      description: "Analyser le ton émotionnel de l'audio",         icon: <BarChart2       className="h-4 w-4" />, needsLabels: true  },
+    { type: "transcription",  label: "Transcription",  description: "Retranscrire le contenu audio en texte",       icon: <Mic       className="h-4 w-4" />, needsLabels: false },
+    { type: "classification", label: "Classification", description: "Catégoriser chaque fichier audio",             icon: <Tag       className="h-4 w-4" />, needsLabels: true  },
   ],
   text: [
-    { type: "classification", label: "Classification", description: "Catégoriser chaque document texte",             icon: <Tag             className="h-4 w-4" />, needsLabels: true  },
-    { type: "ner",            label: "NER",            description: "Identifier les entités nommées (personnes…)",   icon: <Fingerprint     className="h-4 w-4" />, needsLabels: true  },
-    { type: "sentiment",      label: "Sentiment",      description: "Classer le ton émotionnel du texte",            icon: <BarChart2       className="h-4 w-4" />, needsLabels: true  },
+    { type: "classification", label: "Classification", description: "Catégoriser chaque document texte",            icon: <Tag         className="h-4 w-4" />, needsLabels: true },
+    { type: "sequence",       label: "NER / Séquence", description: "Identifier les entités nommées",              icon: <Fingerprint className="h-4 w-4" />, needsLabels: true },
   ],
-  csv:  [
-    { type: "classification", label: "Classification de lignes", description: "Étiqueter chaque ligne du tableau",  icon: <Tag             className="h-4 w-4" />, needsLabels: true  },
-  ],
-  json: [
-    { type: "classification", label: "Classification", description: "Catégoriser chaque entrée JSON",               icon: <Tag             className="h-4 w-4" />, needsLabels: true  },
-  ],
+  csv:  [{ type: "classification", label: "Classification de lignes", description: "Étiqueter chaque ligne du tableau", icon: <Tag className="h-4 w-4" />, needsLabels: true }],
+  json: [{ type: "classification", label: "Classification",           description: "Catégoriser chaque entrée JSON",    icon: <Tag className="h-4 w-4" />, needsLabels: true }],
 }
 
 const DEFAULT_TASKS: TaskDefinition[] = [
   { type: "classification", label: "Classification", description: "Attribuer une catégorie à chaque élément", icon: <Tag className="h-4 w-4" />, needsLabels: true },
 ]
 
-// ─────────────────────────────────────────────
-// COULEURS
-// ─────────────────────────────────────────────
+// ─── Couleurs ────────────────────────────────────────────────────────────────
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -108,9 +83,7 @@ function getNextColor(usedColors: string[]): string {
 
 function generateId() { return Math.random().toString(36).slice(2, 9) }
 
-// ─────────────────────────────────────────────
-// SOUS-COMPOSANTS
-// ─────────────────────────────────────────────
+// ─── Sous-composants ─────────────────────────────────────────────────────────
 
 function SectionHeader({ label, subtitle, step }: { label: string; subtitle?: string; step: number }) {
   return (
@@ -140,16 +113,12 @@ function TaskCard({ task, selected, onSelect }: { task: TaskDefinition; selected
           : "border-border bg-background hover:border-border/80 hover:bg-muted/30"
       )}
     >
-      <div className={cn(
-        "absolute top-3 right-3 h-4 w-4 rounded-full border-2 transition-all",
-        selected ? "border-primary bg-primary" : "border-muted-foreground/30"
-      )}>
+      <div className={cn("absolute top-3 right-3 h-4 w-4 rounded-full border-2 transition-all",
+        selected ? "border-primary bg-primary" : "border-muted-foreground/30")}>
         {selected && <div className="absolute inset-0.5 rounded-full bg-white" />}
       </div>
-      <div className={cn(
-        "flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-        selected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-      )}>
+      <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+        selected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
         {task.icon}
       </div>
       <div>
@@ -163,26 +132,20 @@ function TaskCard({ task, selected, onSelect }: { task: TaskDefinition; selected
 }
 
 function LabelRow({ label, onRemove, onChange }: {
-  label:    AnnotationLabel
-  onRemove: () => void
-  onChange: (u: AnnotationLabel) => void
+  label: AnnotationLabel; onRemove: () => void; onChange: (u: AnnotationLabel) => void
 }) {
   const [showPalette, setShowPalette] = useState(false)
   return (
     <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
       <div className="relative shrink-0">
-        <button
-          type="button"
-          onClick={() => setShowPalette(p => !p)}
+        <button type="button" onClick={() => setShowPalette(p => !p)}
           className="flex h-6 w-6 items-center justify-center rounded-md border-2 transition-all hover:scale-110"
           style={{ backgroundColor: label.color, borderColor: label.color }}
         />
         {showPalette && (
           <div className="absolute top-8 left-0 z-20 flex flex-wrap gap-1.5 rounded-xl border bg-popover p-2.5 shadow-lg w-[140px]">
             {PRESET_COLORS.map(color => (
-              <button
-                key={color}
-                type="button"
+              <button key={color} type="button"
                 onClick={() => { onChange({ ...label, color }); setShowPalette(false) }}
                 className={cn("h-5 w-5 rounded-md border-2 transition-all hover:scale-110",
                   label.color === color ? "border-foreground scale-110" : "border-transparent")}
@@ -193,26 +156,20 @@ function LabelRow({ label, onRemove, onChange }: {
         )}
       </div>
       <input
-        type="text"
-        value={label.name}
+        type="text" value={label.name}
         onChange={e => onChange({ ...label, name: e.target.value })}
         placeholder="Nom du label…"
         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
       />
-      <button
-        type="button"
-        onClick={onRemove}
-        className="shrink-0 rounded-md p-1 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
-      >
+      <button type="button" onClick={onRemove}
+        className="shrink-0 rounded-md p-1 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors">
         <X className="h-3.5 w-3.5" />
       </button>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────
-// COMPOSANT PRINCIPAL
-// ─────────────────────────────────────────────
+// ─── Composant principal ──────────────────────────────────────────────────────
 
 export function AnnotationConfigurator({
   dataset, elementConfigs, onConfigChange, className,
@@ -220,14 +177,15 @@ export function AnnotationConfigurator({
   const includedCount = elementConfigs.filter(c => c.include).length
   const tasks = TASKS_BY_TYPE[dataset.dataType] ?? DEFAULT_TASKS
 
-  const [selectedTaskType, setSelectedTaskType] = useState<AnnotationTaskType | null>(null)
+  const [selectedTaskType, setSelectedTaskType] = useState<TaskType | null>(null)
   const [labels,           setLabels]           = useState<AnnotationLabel[]>([])
   const [allowMultiple,    setAllowMultiple]     = useState(false)
   const [allowSkip,        setAllowSkip]         = useState(true)
+  const [instructions,     setInstructions]      = useState("")   // ← NOUVEAU
 
   const selectedTask = tasks.find(t => t.type === selectedTaskType) ?? null
 
-  const handleTaskSelect = useCallback((type: AnnotationTaskType) => {
+  const handleTaskSelect = useCallback((type: TaskType) => {
     setSelectedTaskType(type)
     setLabels([])
   }, [])
@@ -242,6 +200,7 @@ export function AnnotationConfigurator({
     setLabels(prev => prev.map(l => l.id === updated.id ? updated : l))
   }, [])
 
+  // Remonte la config complète au parent — incluant instructions
   useEffect(() => {
     if (!selectedTask) { onConfigChange?.(null); return }
     const validLabels = labels.filter(l => l.name.trim())
@@ -252,21 +211,22 @@ export function AnnotationConfigurator({
       labels:        selectedTask.needsLabels ? validLabels : [],
       allowMultiple,
       allowSkip,
+      instructions:  instructions.trim() || undefined,  // ← inclus si non vide
     })
-  }, [selectedTask, labels, allowMultiple, allowSkip, onConfigChange])
+  }, [selectedTask, labels, allowMultiple, allowSkip, instructions, onConfigChange])
 
-  const optionsSectionStep = selectedTask?.needsLabels ? 3 : 2
+  // Numéro de section dynamique
+  const optionsSectionStep    = selectedTask?.needsLabels ? 3 : 2
+  const instructionsSectionStep = optionsSectionStep + 1
 
   return (
     <div className={cn("flex flex-col gap-7", className)}>
 
-      {/* Contexte */}
+      {/* Bandeau contexte */}
       <div className="flex items-start gap-2.5 rounded-xl border bg-muted/30 px-4 py-3">
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <p className="text-sm text-muted-foreground leading-relaxed">
-          <strong className="text-foreground">
-            {includedCount} élément{includedCount > 1 ? "s" : ""}
-          </strong>{" "}
+          <strong className="text-foreground">{includedCount} élément{includedCount > 1 ? "s" : ""}</strong>{" "}
           sélectionné{includedCount > 1 ? "s" : ""} dans{" "}
           <strong className="text-foreground">{dataset.title}</strong>.
           Configurez la tâche partagée par tous les groupes.
@@ -291,7 +251,7 @@ export function AnnotationConfigurator({
         </div>
       </div>
 
-      {/* Section 2 — Labels */}
+      {/* Section 2 — Labels (si besoin) */}
       {selectedTask?.needsLabels && (
         <>
           <SectionDivider />
@@ -386,6 +346,36 @@ export function AnnotationConfigurator({
           </div>
         </>
       )}
+
+      {/* Section Instructions — optionnelle, toujours en dernier */}
+      {selectedTask && (
+        <>
+          <SectionDivider />
+          <div className="flex flex-col gap-4">
+            <SectionHeader
+              step={instructionsSectionStep}
+              label="Instructions pour les annotateurs"
+              subtitle="Optionnel — affichées dans la page de la tâche et dans l'interface d'annotation"
+            />
+            <div className="flex flex-col gap-1.5">
+              <div className="relative">
+                <FileText className="absolute left-3 top-3 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <textarea
+                  value={instructions}
+                  onChange={e => setInstructions(e.target.value)}
+                  placeholder={`Ex : Dessinez une bounding box autour de chaque véhicule visible.\n• Un box par véhicule, bien ajusté\n• Ignorer les panneaux de signalisation`}
+                  rows={5}
+                  className="w-full rounded-xl border bg-background pl-9 pr-4 pt-3 pb-3 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50 leading-relaxed"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Supporte les retours à la ligne. Préfixez une ligne avec <code className="bg-muted px-1 rounded text-[10px]">•</code> pour créer une puce.
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
     </div>
   )
 }

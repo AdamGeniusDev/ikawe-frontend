@@ -377,7 +377,7 @@ const StepperFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
         "fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between",
         "bg-white/90 dark:bg-zinc-900/95 backdrop-blur-md border-t py-4 px-6",
         
-        "lg:left-[280px]",
+        "lg:left-70",
         className
       )}
       {...props}

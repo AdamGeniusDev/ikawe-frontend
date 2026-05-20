@@ -9,8 +9,8 @@ import {
   getSessionById,
   getBatchById,
   canAccessBatch,
-  MOCK_USERS,
 } from '@/constants/mock-data-annotate'
+import { MOCK_USERS } from '@/types/user' 
 import AnnotationShell    from '@/components/annotate/AnnotationShell'
 import CompletionScreen   from '@/components/annotate/CompletionScreen'
 import ImageViewer        from '@/components/annotate/viewers/ImageViewer'

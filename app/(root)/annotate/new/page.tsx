@@ -205,6 +205,7 @@ export default function AnnotateNew() {
             <JobAssignmentConfigurator
               dataset={selected}
               elementConfigs={elementConfigs}
+              key={includedCount}
               currentUserId={CURRENT_USER.id}
               onConfigChange={setAssignmentConfig}
             />

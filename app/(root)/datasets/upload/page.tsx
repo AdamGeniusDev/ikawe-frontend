@@ -10,7 +10,7 @@ import {
   X, CheckCircle2, AlertCircle, Files, Globe, Lock, Users, Tag,
   LucideIcon,
 } from 'lucide-react'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import {
   Stepper, StepperList, StepperItem, StepperTrigger, StepperIndicator,
@@ -18,6 +18,11 @@ import {
   StepperNext, StepperPrevious,
 } from '@/components/ui/stepper'
 import { formatBytes, simulateZipAnalysis } from '@/lib/utils'
+import { PreviewStep } from '@/components/upload/PreviewStep'
+import { ImageFilePreview } from '@/components/upload/ImagePreview'
+import { AudioFilePreview } from '@/components/upload/AudioPreview'
+import { TextFilePreview } from '@/components/upload/TextPreview'
+import { CsvFilePreview } from '@/components/upload/CsvPreview'
 
 
 type DataType = "audio" | "text" | "image" | ""
@@ -32,6 +37,7 @@ interface UploadedFile {
   detectedCount?: number
   ignoredCount?: number
   ignoredExtensions?: string[]
+  sampleUrls?: string[]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -115,6 +121,81 @@ const Upload = () => {
 
   const step2Valid = name.trim() !== ""
 
+  const audioPreviewFiles: AudioFilePreview[] = uploadedFiles
+  .filter(f => f.progress === 100)
+  .slice(0, 3)
+  .map((f, i) => ({
+    id: f.id,
+    name: f.isZip ? `extrait_${i + 1}.wav` : f.name,
+    duration: "2min 14s",   // en prod : lu depuis les métadonnées
+    sizeMb: formatBytes(f.size / Math.max(f.detectedCount ?? 1, 1)),
+  }))
+
+  const imagePreviewFiles: ImageFilePreview[] = uploadedFiles
+  .filter(f => f.progress === 100)
+  .slice(0, 3)
+  .map((f, i) => ({
+    id: f.id,
+    name: f.isZip ? `image_${i + 1}.jpg` : f.name,
+    sizeMb: formatBytes(f.size / Math.max(f.detectedCount ?? 1, 1)),
+    url: f.sampleUrls?.[i] ?? `https://picsum.photos/seed/${f.id}-${i}/640/360`,
+  }))
+
+    const textReadyFiles = uploadedFiles.filter(f => f.progress === 100 && dataType === "text")
+
+    const hasCsv = textReadyFiles.some(f => 
+      f.isZip ? false : f.name.match(/\.(csv|tsv)$/i)
+    )
+
+    const csvPreviewFiles: CsvFilePreview[] = hasCsv
+      ? textReadyFiles
+          .filter(f => f.name.match(/\.(csv|tsv)$/i))
+          .slice(0, 1)
+          .map(f => ({
+            id: f.id,
+            name: f.name,
+            sizeMb: formatBytes(f.size),
+            headers: ["id", "texte", "langue", "source", "label"],
+            rows: [
+              ["001", "Mo gbɔn fon ɖé...", "fon", "marché_cotonou", "positif"],
+              ["002", "Emi fẹ́ràn ọjà yìí", "yoruba", "marché_lagos", "positif"],
+              ["003", "Nga ñëw ci dëkk bi", "wolof", "dakar_plateau", "neutre"],
+              ["004", "M'bɛ a kɔ sɛ...", "baoulé", "abidjan_adjamé", "négatif"],
+              ["005", "Nde, o di mma...", "igbo", "enugu_market", "positif"],
+            ],
+          }))
+      : []
+
+    const textPreviewFiles: TextFilePreview[] = !hasCsv && textReadyFiles.length > 0
+      ? textReadyFiles.slice(0, 1).map(f => ({
+          id: f.id,
+          name: f.name,
+          sizeMb: formatBytes(f.size),
+          type: (f.name.endsWith(".json") ? "json" : "txt") as "json" | "txt",
+          lines: f.name.endsWith(".json")
+            ? ['[', '  { "id": 1, "text": "Mo gbɔn fon ɖé...", "lang": "fon" },', '  { "id": 2, "text": "Emi fẹ́ràn ọjà yìí", "lang": "yoruba" }', ']']
+            : ["Mo gbɔn fon ɖé doka tɔn...", "Emi fẹ́ràn ọjà yìí gan-an", "Nga ñëw ci dëkk bi tey"],
+        }))
+      : []
+
+  const totalIgnored = uploadedFiles.reduce(
+    (acc, f) => acc + (f.ignoredCount ?? 0), 0
+  )
+  const ignoredExtensions = [
+    ...new Set(
+      uploadedFiles.flatMap(f => f.ignoredExtensions ?? [])
+    )
+  ]
+
+  const detectedExts = [
+  ...new Set(
+    uploadedFiles
+      .filter(f => f.progress === 100)
+      .flatMap(f => f.ignoredExtensions ? [] : [f.name.split('.').pop() ?? ''])
+      .filter(Boolean)
+  )
+]
+
  
   const totalRetainedFiles = uploadedFiles.reduce((acc, f) => {
     if (f.isZip) return acc + (f.detectedCount ?? 0)
@@ -134,55 +215,76 @@ const Upload = () => {
   }, [])
 
   const processFiles = useCallback((files: File[]) => {
-    const MAX_DIRECT = 20
+      const MAX_DIRECT = 20
 
-    if (files.length > MAX_DIRECT) {
-      toast.warning(`${files.length} fichiers sélectionnés`, {
-        description: "Pour plus de 20 fichiers, préférez un ZIP pour de meilleures performances.",
-      })
-    }
+      // Sépare valides et invalides
+      const validFiles: File[] = []
+      const invalidFiles: { name: string; ext: string }[] = []
 
-    files.forEach((file) => {
-      const id = crypto.randomUUID()
-      const isZip = file.name.toLowerCase().endsWith(".zip")
-      if (!file.name.toLowerCase().endsWith(".zip")) {
+      files.forEach((file) => {
+        const isZip = file.name.toLowerCase().endsWith(".zip")
         const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
-        if (!currentTaskType?.validExts.includes(ext)) {
-          toast.error(`Format non supporté : .${ext}`, {
-            description: `Formats acceptés : ${currentTaskType?.formats}`,
-          })
-          return
-        }
-      }
 
-      const newFile: UploadedFile = {
-        id,
-        name: file.name,
-        size: file.size,
-        progress: 0,
-        isZip,
-      }
-
-      setUploadedFiles((prev) => [...prev, newFile])
-
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 18 + 4
-        if (progress >= 100) {
-          progress = 100
-          clearInterval(interval)
-          setUploadedFiles((prev) =>
-            prev.map((f) => (f.id === id ? { ...f, progress: 100 } : f))
-          )
-          if (isZip && currentTaskType) runZipAnalysis(id, currentTaskType)
+        if (!isZip && !currentTaskType?.validExts.includes(ext)) {
+          invalidFiles.push({ name: file.name, ext })
         } else {
-          setUploadedFiles((prev) =>
-            prev.map((f) => (f.id === id ? { ...f, progress: Math.round(progress) } : f))
-          )
+          validFiles.push(file)
         }
-      }, 150)
-    })
-  }, [currentTaskType, runZipAnalysis])
+      })
+
+      // Toast récap une seule fois
+      if (invalidFiles.length > 0 && validFiles.length > 0) {
+        const exts = [...new Set(invalidFiles.map(f => `.${f.ext}`))].join(", ")
+        toast.warning(`${invalidFiles.length} fichier(s) ignoré(s)`, {
+          description: `Formats non supportés : ${exts.toUpperCase()}. ${validFiles.length} fichier(s) accepté(s).`,
+        })
+      } else if (invalidFiles.length > 0 && validFiles.length === 0) {
+        const exts = [...new Set(invalidFiles.map(f => `.${f.ext}`))].join(", ")
+        toast.error("Aucun fichier compatible", {
+          description: `Formats non supportés : ${exts.toUpperCase()}. Formats acceptés : ${currentTaskType?.formats}`,
+        })
+        return
+      }
+
+      if (validFiles.length > MAX_DIRECT) {
+        toast.warning(`${validFiles.length} fichiers sélectionnés`, {
+          description: "Pour plus de 20 fichiers, préférez un ZIP.",
+        })
+      }
+
+      // Upload uniquement les valides
+      validFiles.forEach((file) => {
+          const id = crypto.randomUUID()
+          const isZip = file.name.toLowerCase().endsWith(".zip")
+
+          const newFile: UploadedFile = {
+            id,
+            name: file.name,
+            size: file.size,
+            progress: 0,
+            isZip,
+          }
+
+          setUploadedFiles((prev) => [...prev, newFile])
+
+          let progress = 0
+          const interval = setInterval(() => {
+            progress += Math.random() * 18 + 4
+            if (progress >= 100) {
+              progress = 100
+              clearInterval(interval)
+              setUploadedFiles((prev) =>
+                prev.map((f) => (f.id === id ? { ...f, progress: 100 } : f))
+              )
+              if (isZip && currentTaskType) runZipAnalysis(id, currentTaskType)
+            } else {
+              setUploadedFiles((prev) =>
+                prev.map((f) => (f.id === id ? { ...f, progress: Math.round(progress) } : f))
+              )
+            }
+          }, 150)
+        })
+    }, [currentTaskType, runZipAnalysis])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -208,23 +310,47 @@ const Upload = () => {
   const removeFile = (id: string) =>
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id))
 
-  const handleTaskTypeChange = (type: DataType) => {
-    const zipsReady = uploadedFiles.filter((f) => f.isZip && f.progress === 100)
-    if (zipsReady.length > 0) {
-      const newType = TASK_TYPES.find((t) => t.id === type)
-      if (newType) {
-        setUploadedFiles((prev) =>
-          prev.map((f) =>
-            f.isZip && f.progress === 100
-              ? { ...f, detectedCount: undefined, ignoredCount: undefined, ignoredExtensions: undefined }
-              : f
-          )
-        )
-        zipsReady.forEach((f) => runZipAnalysis(f.id, newType))
+  const pendingTypeChange = useRef<{ type: DataType; timer: ReturnType<typeof setTimeout> } | null>(null)
+
+    const handleTaskTypeChange = (type: DataType) => {
+      if (type === dataType) return
+
+      // Annule un changement en attente
+      if (pendingTypeChange.current) {
+        clearTimeout(pendingTypeChange.current.timer)
+        toast.dismiss("type-change")
       }
+
+      if (uploadedFiles.length === 0) {
+        setDataType(type)
+        return
+      }
+
+      // Toast avec compte à rebours
+      const timer = setTimeout(() => {
+        setDataType(type)
+        setUploadedFiles([])
+        pendingTypeChange.current = null
+        toast.dismiss("type-change")
+      }, 5000)
+
+      pendingTypeChange.current = { type, timer }
+
+      const newLabel = TASK_TYPES.find(t => t.id === type)?.label
+
+      toast.warning(`Passage vers "${newLabel}"`, {
+        id: "type-change",
+        description: "Les fichiers uploadés seront supprimés dans 5s.",
+        duration: 5000,
+        action: {
+          label: "Annuler",
+          onClick: () => {
+            clearTimeout(pendingTypeChange.current?.timer)
+            pendingTypeChange.current = null
+          },
+        },
+      })
     }
-    setDataType(type)
-  }
 
   //Tags
   const addTag = (raw: string) => {
@@ -275,7 +401,7 @@ const Upload = () => {
       <div className="flex-1 p-6">
         <Stepper value={step} onValueChange={setStep} className='flex items-center justify-center'>
 
-          <StepperList className='max-w-sm '>
+          <StepperList className='max-w-md '>
             <StepperItem step={0} canContinue={step1Valid}>
               <StepperTrigger>
                 <StepperIndicator />
@@ -283,7 +409,14 @@ const Upload = () => {
               </StepperTrigger>
               <StepperSeparator />
             </StepperItem>
-            <StepperItem step={1} canContinue={step2Valid}>
+            <StepperItem step={1} canContinue={true}>
+              <StepperTrigger>
+                <StepperIndicator />
+                <StepperTitle>Previsualisation</StepperTitle>
+              </StepperTrigger>
+              <StepperSeparator />
+            </StepperItem>
+            <StepperItem step={2} canContinue={step2Valid}>
               <StepperTrigger>
                 <StepperIndicator />
                 <StepperTitle>Informations</StepperTitle>
@@ -512,9 +645,26 @@ const Upload = () => {
             </StepperFooter>
           </StepperPanel>
 
-          {/* Step 2 : Informations */}
-
+          {/* Step 2: Previsualisation */}
           <StepperPanel step={1}>
+            <PreviewStep
+              dataType={dataType}
+              totalRetainedFiles={totalRetainedFiles}
+              totalSize={totalSize}
+              totalIgnored={totalIgnored}
+              ignoredExtensions={ignoredExtensions}
+              audioFiles={audioPreviewFiles}
+              imageFiles={imagePreviewFiles}
+              csvFiles={csvPreviewFiles}
+              textFiles={textPreviewFiles}
+              detectedExts={detectedExts}
+            />
+           
+          </StepperPanel>
+
+          {/* Step 3 : Informations */}
+
+          <StepperPanel step={2}>
             <div className="grid gap-6">
 
               {/* Nom + Description */}

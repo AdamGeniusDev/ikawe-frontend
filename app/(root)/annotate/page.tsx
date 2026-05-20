@@ -9,7 +9,8 @@ import {
   Users, Eye,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { MOCK_USERS, getJobGroupsForUser, MOCK_JOBS, MOCK_BATCHES } from '@/constants/mock-data-annotate'
+import { getJobGroupsForUser, MOCK_JOBS, MOCK_BATCHES } from '@/constants/mock-data-annotate'
+import { MOCK_USERS } from '@/types/user'
 import type { DataType, TaskType } from '@/types/datasets'
 import type { JobGroup, AnnotationBatch, BatchStatus, AnnotationJob } from '@/types/annotation'
 

@@ -35,7 +35,7 @@ export const formatBytes = (bytes: number) => {
 
 export const simulateZipAnalysis = (
   validExts: string[]
-): { detectedCount: number; ignoredCount: number; ignoredExtensions: string[] } => {
+): { detectedCount: number; ignoredCount: number; ignoredExtensions: string[],sampleUrls: string[] } => {
   const totalFiles = Math.floor(Math.random() * 800) + 50
   const ignoredCount = Math.floor(totalFiles * (Math.random() * 0.15))
   const detectedCount = totalFiles - ignoredCount
@@ -43,7 +43,11 @@ export const simulateZipAnalysis = (
   const ignoredExtensions = allPossible
     .filter((e) => !validExts.includes(e))
     .slice(0, ignoredCount > 0 ? 2 : 0)
-  return { detectedCount, ignoredCount, ignoredExtensions }
+  return { detectedCount, ignoredCount, ignoredExtensions,sampleUrls: [
+      "https://placehold.co/640x360?text=Sample+1",
+      "https://placehold.co/640x360?text=Sample+2", 
+      "https://placehold.co/640x360?text=Sample+3",
+    ] }
 }
 export function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`

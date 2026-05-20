@@ -1,3 +1,4 @@
+import { useUserStore } from '@/store/user.store';
 import axios from 'axios'
 
 export const api = axios.create({
@@ -14,7 +15,13 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if(error.response?.status === 401){
-            // ce qu'il faut faire
+            
+            // ↑ getState() = accès au store hors composant React
+            useUserStore.getState().logout()
+
+            //si en gros on recoit une reponse 401 on redirige automatiquement vers la page de login
+
+            window.location.href='/login'
         }
         return Promise.reject(error)
     }

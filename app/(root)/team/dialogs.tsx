@@ -1,7 +1,10 @@
 "use client"
 
+// app/(root)/team/dialogs.tsx
+//
+
 import { useState } from "react"
-import { Check, Pencil, Trash2, UserPlus, Mail } from "lucide-react"
+import { Check, Trash2, UserPlus, Mail, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Dialog, DialogContent, DialogHeader,
@@ -11,267 +14,170 @@ import { Button } from "@/components/ui/button"
 import { Input  } from "@/components/ui/input"
 import { Label  } from "@/components/ui/label"
 import {
-  Role, TeamMember, Collaborator,
-  Permission, PERMISSION_LABELS, COLOR_OPTIONS,
+  User, TeamRole, TEAM_ROLE_LABELS,
+  getUserById, getAvatarProps,
+} from "@/types/user"
+import {
+  Team, TeamMember,
+  PERMISSION_LABELS, TEAM_ROLE_PERMISSIONS,
 } from "@/types/team"
+import Image from "next/image"
 
+// ─── Constantes visuelles ─────────────────────────────────────────────────────
 
+const TEAM_ROLE_COLORS: Record<TeamRole, string> = {
+  team_owner: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
+  team_admin: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  reviewer:   'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  annotator:  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  viewer:     'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',
+}
 
-export function RolePill({ role }: { role: Role }) {
+// Rôles assignables (team_owner non assignable manuellement — c'est le créateur)
+const ASSIGNABLE_ROLES: TeamRole[] = ['team_admin', 'reviewer', 'annotator', 'viewer']
+
+// ─── Composants partagés ──────────────────────────────────────────────────────
+
+export function RolePill({ role }: { role: TeamRole }) {
   return (
-    <span className={cn(
-      "text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap",
-      role.color
-    )}>
-      {role.name}
+    <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap", TEAM_ROLE_COLORS[role])}>
+      {TEAM_ROLE_LABELS[role]}
     </span>
   )
 }
 
-function MemberHeader({ member }: { member: TeamMember }) {
+function UserAvatar({ user }: { user: User }) {
+  const avatar = getAvatarProps(user)
+  if (avatar.avatarUrl) {
+    return <Image src={avatar.avatarUrl} alt={user.name} width={36} height={36}
+      className="w-9 h-9 rounded-full object-cover shrink-0" />
+  }
+  return (
+    <div className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+      style={{ backgroundColor: avatar.color }}>
+      {avatar.initials}
+    </div>
+  )
+}
+
+function UserMiniCard({ user }: { user: User }) {
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
-      <div className={cn(
-        "w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
-        member.collaborator.avatarColor
-      )}>
-        {member.collaborator.initials}
-      </div>
+      <UserAvatar user={user} />
       <div>
-        <p className="text-sm font-medium leading-tight">{member.collaborator.name}</p>
-        <p className="text-xs text-muted-foreground">{member.collaborator.email}</p>
+        <p className="text-sm font-medium">{user.name}</p>
+        <p className="text-xs text-muted-foreground">{user.email}</p>
+      </div>
+    </div>
+  )
+}
+
+function MemberHeader({ member }: { member: TeamMember }) {
+  const user = getUserById(member.userId)
+  if (!user) return null
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
+      <UserAvatar user={user} />
+      <div>
+        <p className="text-sm font-medium leading-tight">{user.name}</p>
+        <p className="text-xs text-muted-foreground">{user.email}</p>
         <div className="mt-1"><RolePill role={member.role} /></div>
       </div>
     </div>
   )
 }
 
-function CollabMiniCard({ collaborator }: { collaborator: Collaborator }) {
+// ─── RoleSelector ─────────────────────────────────────────────────────────────
+// Liste les rôles assignables avec leurs permissions résumées
+
+function RoleSelector({ value, onChange }: { value: TeamRole; onChange: (r: TeamRole) => void }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
-      <div className={cn(
-        "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-        collaborator.avatarColor
-      )}>
-        {collaborator.initials}
-      </div>
-      <div>
-        <p className="text-sm font-medium">{collaborator.name}</p>
-        <p className="text-xs text-muted-foreground">{collaborator.email}</p>
-      </div>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────
-// Formulaire rôle — création et édition
-// ─────────────────────────────────────────────
-
-interface RoleFormProps {
-  initial?:   Partial<Role>
-  onSave:     (data: Omit<Role, "id">) => void
-  onCancel:   () => void
-  saveLabel?: string
-}
-
-function RoleForm({ initial, onSave, onCancel, saveLabel = "Créer" }: RoleFormProps) {
-  const [name,  setName]  = useState(initial?.name  ?? "")
-  const [color, setColor] = useState(initial?.color ?? COLOR_OPTIONS[0].value)
-  const [perms, setPerms] = useState<Permission[]>(initial?.permissions ?? [])
-
-  const toggle = (p: Permission) =>
-    setPerms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Nom du rôle</Label>
-        <Input
-          placeholder="Ex : Vérificateur senior"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          className="h-8 text-xs"
-          autoFocus
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Couleur</Label>
-        <div className="flex gap-2 flex-wrap">
-          {COLOR_OPTIONS.map(opt => (
-            <button key={opt.value} type="button" onClick={() => setColor(opt.value)}
-              className={cn(
-                "text-[10px] font-medium px-2.5 py-1 rounded-full transition-all", opt.value,
-                color === opt.value
-                  ? "ring-2 ring-offset-1 ring-foreground/30"
-                  : "opacity-50 hover:opacity-75"
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Permissions</Label>
-        <div className="flex flex-col rounded-lg border border-border/50 overflow-hidden">
-          {(Object.entries(PERMISSION_LABELS) as [Permission, string][]).map(([key, label]) => (
-            <label key={key} className={cn(
-              "flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+    <div className="flex flex-col rounded-lg border border-border/50 overflow-hidden">
+      {ASSIGNABLE_ROLES.map(role => {
+        const perms = TEAM_ROLE_PERMISSIONS[role]
+        return (
+          <button key={role} type="button" onClick={() => onChange(role)}
+            className={cn(
+              "flex items-center justify-between px-3 py-2.5 text-left transition-colors",
               "hover:bg-muted/50 border-b border-border/30 last:border-0",
-              perms.includes(key) && "bg-muted/30"
+              value === role && "bg-muted/40"
             )}>
-              <input type="checkbox" className="rounded shrink-0"
-                checked={perms.includes(key)} onChange={() => toggle(key)} />
-              <span className="text-xs">{label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={onCancel}>Annuler</Button>
-        <Button size="sm"
-          onClick={() => onSave({ name: name.trim(), color, permissions: perms })}
-          disabled={!name.trim()}
-        >
-          {saveLabel}
-        </Button>
-      </div>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <RolePill role={role} />
+              <div className="flex gap-1 flex-wrap">
+                {perms.map(p => (
+                  <span key={p} className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                    {PERMISSION_LABELS[p].split(" ")[0]}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {value === role && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0 ml-2" />}
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────
-// 1. Dialog : Gérer les rôles
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. DialogGererRoles — affichage des rôles et permissions (lecture seule)
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogGererRolesProps {
-  open:          boolean
-  onOpenChange:  (open: boolean) => void
-  roles:         Role[]
-  onRolesChange: (roles: Role[]) => void
-}
-
-type RoleFormMode = { type: "create" } | { type: "edit"; role: Role } | null
-
-export function DialogGererRoles({
-  open, onOpenChange, roles, onRolesChange,
-}: DialogGererRolesProps) {
-  const [mode, setMode] = useState<RoleFormMode>(null)
-
-  const handleCreate = (data: Omit<Role, "id">) => {
-    onRolesChange([...roles, { ...data, id: crypto.randomUUID() }])
-    setMode(null)
-  }
-
-  const handleEdit = (id: string, data: Omit<Role, "id">) => {
-    onRolesChange(roles.map(r => r.id === id ? { ...data, id } : r))
-    setMode(null)
-  }
-
+export function DialogGererRoles({ open, onOpenChange }: {
+  open: boolean; onOpenChange: (v: boolean) => void
+}) {
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) setMode(null); onOpenChange(v) }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {mode === null
-              ? "Gérer les rôles"
-              : mode.type === "create"
-              ? "Nouveau rôle"
-              : "Modifier le rôle"}
-          </DialogTitle>
-          {mode === null && (
-            <DialogDescription className="text-xs text-muted-foreground">
-              Créez des rôles personnalisés et définissez leurs permissions.
-            </DialogDescription>
-          )}
+          <DialogTitle>Rôles disponibles</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Les rôles définissent ce que chaque membre peut faire dans une équipe.
+          </DialogDescription>
         </DialogHeader>
-
-        {mode === null && (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col rounded-lg border border-border/50 overflow-hidden">
-              {roles.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-6">
-                  Aucun rôle. Créez-en un pour commencer.
-                </p>
-              )}
-              {roles.map(role => (
-                <div key={role.id}
-                  className="flex items-center gap-3 px-3 py-2.5 border-b border-border/30 last:border-0">
-                  <RolePill role={role} />
-                  <div className="flex gap-1 flex-1 flex-wrap">
-                    {role.permissions.map(p => (
-                      <span key={p}
-                        className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                        {PERMISSION_LABELS[p].split(" ")[0]}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button type="button" onClick={() => setMode({ type: "edit", role })}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <button type="button"
-                      onClick={() => onRolesChange(roles.filter(r => r.id !== role.id))}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
+        <div className="flex flex-col rounded-lg border border-border/50 overflow-hidden">
+          {(Object.entries(TEAM_ROLE_LABELS) as [TeamRole, string][]).map(([role]) => {
+            const perms = TEAM_ROLE_PERMISSIONS[role]
+            return (
+              <div key={role} className="flex items-start gap-3 px-3 py-3 border-b border-border/30 last:border-0">
+                <RolePill role={role} />
+                <div className="flex flex-col gap-1 flex-1">
+                  {perms.map(p => (
+                    <div key={p} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+                      {PERMISSION_LABELS[p]}
+                    </div>
+                  ))}
+                  {perms.length === 0 && <p className="text-xs text-muted-foreground">Aucune permission active</p>}
                 </div>
-              ))}
-            </div>
-            <DialogFooter className="flex-row items-center justify-between sm:justify-between">
-              <Button variant="outline" size="sm" onClick={() => setMode({ type: "create" })}>
-                + Nouveau rôle
-              </Button>
-              <Button size="sm" onClick={() => onOpenChange(false)}>Fermer</Button>
-            </DialogFooter>
-          </div>
-        )}
-
-        {mode?.type === "create" && (
-          <RoleForm
-            onSave={handleCreate}
-            onCancel={() => setMode(null)}
-            saveLabel="Créer le rôle"
-          />
-        )}
-        {mode?.type === "edit" && (
-          <RoleForm
-            initial={mode.role}
-            onSave={data => handleEdit(mode.role.id, data)}
-            onCancel={() => setMode(null)}
-            saveLabel="Enregistrer"
-          />
-        )}
+              </div>
+            )
+          })}
+        </div>
+        <DialogFooter>
+          <Button size="sm" onClick={() => onOpenChange(false)}>Fermer</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. DialogCreerEquipe
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogCreerEquipeProps {
-  open:         boolean
-  onOpenChange: (open: boolean) => void
-  onCreate:     (name: string, description: string) => void
-}
-
-export function DialogCreerEquipe({
-  open, onOpenChange, onCreate,
-}: DialogCreerEquipeProps) {
-  const [name, setName]        = useState("")
-  const [description, setDesc] = useState("")
+export function DialogCreerEquipe({ open, onOpenChange, onCreate }: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  onCreate: (name: string, description: string) => void
+}) {
+  const [name, setName] = useState("")
+  const [desc, setDesc] = useState("")
 
   const handleCreate = () => {
     if (!name.trim()) return
-    onCreate(name.trim(), description.trim())
-    // Reset
-    setName("")
-    setDesc("")
-    onOpenChange(false)
+    onCreate(name.trim(), desc.trim())
+    setName(""); setDesc(""); onOpenChange(false)
   }
 
   return (
@@ -280,71 +186,45 @@ export function DialogCreerEquipe({
         <DialogHeader>
           <DialogTitle>Nouvelle équipe</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Créez un groupe de travail. Vous pourrez y ajouter des membres
-            puis leur assigner des datasets depuis chaque page de dataset.
+            Créez un groupe de travail. Vous pourrez y ajouter des collaborateurs
+            et leur assigner des datasets.
           </DialogDescription>
         </DialogHeader>
-
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">Nom de l'équipe *</Label>
-            <Input
-              placeholder="Ex : Équipe NLP Francophone"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleCreate()}
-              className="h-8 text-xs"
-              autoFocus
-            />
+            <Input placeholder="Ex : Équipe NLP Francophone" value={name}
+              onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()}
+              className="h-8 text-xs" autoFocus />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">Description (optionnel)</Label>
-            <Input
-              placeholder="Ex : Spécialisée dans les entités nommées"
-              value={description}
-              onChange={e => setDesc(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleCreate()}
-              className="h-8 text-xs"
-            />
+            <Input placeholder="Ex : Spécialisée dans les entités nommées" value={desc}
+              onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()}
+              className="h-8 text-xs" />
           </div>
         </div>
-
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Annuler
-          </Button>
-          <Button size="sm" onClick={handleCreate} disabled={!name.trim()}>
-            Créer l'équipe
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button size="sm" onClick={handleCreate} disabled={!name.trim()}>Créer l'équipe</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
 
-// ─────────────────────────────────────────────
-// 3. Dialog : Choisir un rôle pour rejoindre
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. DialogChoisirRole — ajouter un collaborateur à l'équipe ACTIVE
+//    (appelé depuis la vue détail d'une équipe)
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogChoisirRoleProps {
-  open:         boolean
-  onOpenChange: (open: boolean) => void
-  collaborator: Collaborator | null
-  roles:        Role[]
-  onAdd:        (collaborator: Collaborator, role: Role) => void
-}
-
-export function DialogChoisirRole({
-  open, onOpenChange, collaborator, roles, onAdd,
-}: DialogChoisirRoleProps) {
-  const [selectedRoleId, setSelectedRoleId] = useState<string>(roles[0]?.id ?? "")
-
-  if (!collaborator) return null
-
-  const handleAdd = () => {
-    const role = roles.find(r => r.id === selectedRoleId)
-    if (role) { onAdd(collaborator, role); onOpenChange(false) }
-  }
+export function DialogChoisirRole({ open, onOpenChange, user, onAdd }: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  user: User | null
+  onAdd: (user: User, role: TeamRole) => void
+}) {
+  const [selectedRole, setSelectedRole] = useState<TeamRole>('annotator')
+  if (!user) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -352,49 +232,16 @@ export function DialogChoisirRole({
         <DialogHeader>
           <DialogTitle>Choisir un rôle</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Quel rôle souhaitez-vous donner à {collaborator.name} dans l'équipe ?
+            Quel rôle dans cette équipe pour {user.name} ?
           </DialogDescription>
         </DialogHeader>
-
         <div className="flex flex-col gap-4">
-          <CollabMiniCard collaborator={collaborator} />
-          {roles.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4 rounded-lg border border-border/50">
-              Aucun rôle disponible. Créez d'abord des rôles depuis "Gérer les rôles".
-            </p>
-          ) : (
-            <div className="flex flex-col rounded-lg border border-border/50 overflow-hidden">
-              {roles.map(role => (
-                <button key={role.id} type="button" onClick={() => setSelectedRoleId(role.id)}
-                  className={cn(
-                    "flex items-center justify-between px-3 py-2.5 text-left transition-colors",
-                    "hover:bg-muted/50 border-b border-border/30 last:border-0",
-                    selectedRoleId === role.id && "bg-muted/40"
-                  )}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <RolePill role={role} />
-                    <div className="flex gap-1 flex-wrap">
-                      {role.permissions.map(p => (
-                        <span key={p}
-                          className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {PERMISSION_LABELS[p].split(" ")[0]}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  {selectedRoleId === role.id && (
-                    <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+          <UserMiniCard user={user} />
+          <RoleSelector value={selectedRole} onChange={setSelectedRole} />
         </div>
-
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Annuler</Button>
-          <Button size="sm" onClick={handleAdd} disabled={roles.length === 0}>
+          <Button size="sm" onClick={() => { onAdd(user, selectedRole); onOpenChange(false) }}>
             <UserPlus className="h-3.5 w-3.5 mr-1.5" />
             Ajouter à l'équipe
           </Button>
@@ -404,26 +251,113 @@ export function DialogChoisirRole({
   )
 }
 
-// ─────────────────────────────────────────────
-// 4. Dialog : Inviter par email
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. DialogAjouterAEquipe — depuis la section collaborateurs de la vue liste
+//    L'utilisateur choisit À QUELLE équipe ajouter + quel rôle
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogInviterProps {
+export function DialogAjouterAEquipe({ open, onOpenChange, user, teams, onAdd }: {
   open:         boolean
-  onOpenChange: (open: boolean) => void
-  onInvite:     (email: string) => void
+  onOpenChange: (v: boolean) => void
+  user:         User | null
+  teams:        Team[]
+  onAdd:        (user: User, teamId: string, role: TeamRole) => void
+}) {
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(teams[0]?.id ?? "")
+  const [selectedRole,   setSelectedRole]   = useState<TeamRole>('annotator')
+
+  if (!user) return null
+
+  // Équipes où ce collaborateur n'est pas encore membre
+  const availableTeams = teams.filter(
+    t => !t.members.some(m => m.userId === user.id)
+  )
+
+  if (availableTeams.length === 0) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Ajouter à une équipe</DialogTitle>
+          </DialogHeader>
+          <UserMiniCard user={user} />
+          <p className="text-xs text-muted-foreground text-center py-4">
+            {user.name} est déjà membre de toutes vos équipes.
+          </p>
+          <DialogFooter>
+            <Button size="sm" onClick={() => onOpenChange(false)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Ajouter à une équipe</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Choisissez l'équipe et le rôle de {user.name}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <UserMiniCard user={user} />
+
+          {/* Choix de l'équipe */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Équipe</Label>
+            <div className="relative">
+              <select
+                title='available-teams'
+                value={selectedTeamId}
+                onChange={e => setSelectedTeamId(e.target.value)}
+                className="w-full h-8 rounded-lg border bg-background px-3 pr-8 text-xs appearance-none focus:outline-none focus:ring-1 focus:ring-primary/40"
+              >
+                {availableTeams.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Choix du rôle */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">Rôle dans cette équipe</Label>
+            <RoleSelector value={selectedRole} onChange={setSelectedRole} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Annuler</Button>
+          <Button size="sm"
+            disabled={!selectedTeamId}
+            onClick={() => { onAdd(user, selectedTeamId, selectedRole); onOpenChange(false) }}>
+            <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+            Ajouter à l'équipe
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
-export function DialogInviter({ open, onOpenChange, onInvite }: DialogInviterProps) {
-  const [email, setEmail] = useState("")
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. DialogInviter
+// ─────────────────────────────────────────────────────────────────────────────
 
+export function DialogInviter({ open, onOpenChange, onInvite }: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  onInvite: (email: string) => void
+}) {
+  const [email, setEmail] = useState("")
   const isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
   const handleSend = () => {
     if (!isValid) return
-    onInvite(email.trim())
-    setEmail("")
-    onOpenChange(false)
+    onInvite(email.trim()); setEmail(""); onOpenChange(false)
   }
 
   return (
@@ -433,24 +367,15 @@ export function DialogInviter({ open, onOpenChange, onInvite }: DialogInviterPro
           <DialogTitle>Inviter un collaborateur</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Un email d'invitation sera envoyé. Une fois acceptée, la personne
-            apparaîtra dans "Collaborateurs disponibles" et vous pourrez
-            l'ajouter à l'équipe.
+            apparaîtra dans vos collaborateurs et vous pourrez l'ajouter à une équipe.
           </DialogDescription>
         </DialogHeader>
-
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Adresse email</Label>
-          <Input
-            type="email"
-            placeholder="prenom@example.com"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSend()}
-            className="h-8 text-xs"
-            autoFocus
-          />
+          <Input type="email" placeholder="prenom@example.com" value={email}
+            onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSend()}
+            className="h-8 text-xs" autoFocus />
         </div>
-
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Annuler</Button>
           <Button size="sm" onClick={handleSend} disabled={!isValid}>
@@ -463,80 +388,32 @@ export function DialogInviter({ open, onOpenChange, onInvite }: DialogInviterPro
   )
 }
 
-// ─────────────────────────────────────────────
-// 5. Dialog : Changer le rôle d'un membre
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. DialogChangerRole — changer le rôle d'un membre dans son équipe
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogChangerRoleProps {
-  open:         boolean
-  onOpenChange: (open: boolean) => void
-  member:       TeamMember | null
-  roles:        Role[]
-  onRoleChange: (collaboratorId: string, role: Role) => void
-}
-
-export function DialogChangerRole({
-  open, onOpenChange, member, roles, onRoleChange,
-}: DialogChangerRoleProps) {
-  const [selectedId, setSelectedId] = useState(member?.role.id ?? "")
-
+export function DialogChangerRole({ open, onOpenChange, member, onRoleChange }: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  member: TeamMember | null
+  onRoleChange: (userId: string, role: TeamRole) => void
+}) {
+  const [selectedRole, setSelectedRole] = useState<TeamRole>(member?.role ?? 'annotator')
   if (!member) return null
-
-  const handleSave = () => {
-    const role = roles.find(r => r.id === selectedId)
-    if (role) onRoleChange(member.collaborator.id, role)
-    onOpenChange(false)
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Changer le rôle</DialogTitle>
-          <DialogDescription className="sr-only">
-            Modifier le rôle de {member.collaborator.name}
-          </DialogDescription>
+          <DialogDescription className="sr-only">Modifier le rôle du membre dans cette équipe</DialogDescription>
         </DialogHeader>
-
         <div className="flex flex-col gap-4">
           <MemberHeader member={member} />
-          {roles.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              Aucun rôle disponible. Créez d'abord des rôles depuis "Gérer les rôles".
-            </p>
-          ) : (
-            <div className="flex flex-col rounded-lg border border-border/50 overflow-hidden">
-              {roles.map(role => (
-                <button key={role.id} type="button" onClick={() => setSelectedId(role.id)}
-                  className={cn(
-                    "flex items-center justify-between px-3 py-2.5 text-left transition-colors",
-                    "hover:bg-muted/50 border-b border-border/30 last:border-0",
-                    selectedId === role.id && "bg-muted/40"
-                  )}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <RolePill role={role} />
-                    <div className="flex gap-1 flex-wrap">
-                      {role.permissions.map(p => (
-                        <span key={p}
-                          className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          {PERMISSION_LABELS[p].split(" ")[0]}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  {selectedId === role.id && (
-                    <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+          <RoleSelector value={selectedRole} onChange={setSelectedRole} />
         </div>
-
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Annuler</Button>
-          <Button size="sm" onClick={handleSave} disabled={roles.length === 0}>
+          <Button size="sm" onClick={() => { onRoleChange(member.userId, selectedRole); onOpenChange(false) }}>
             Enregistrer
           </Button>
         </DialogFooter>
@@ -545,43 +422,36 @@ export function DialogChangerRole({
   )
 }
 
-// ─────────────────────────────────────────────
-// 6. Dialog : Détails membre
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. DialogDetails — fiche d'un membre
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogDetailsProps {
-  open:         boolean
-  onOpenChange: (open: boolean) => void
-  member:       TeamMember | null
-}
-
-export function DialogDetails({ open, onOpenChange, member }: DialogDetailsProps) {
+export function DialogDetails({ open, onOpenChange, member }: {
+  open: boolean; onOpenChange: (v: boolean) => void; member: TeamMember | null
+}) {
   if (!member) return null
+  const user  = getUserById(member.userId)
+  const perms = TEAM_ROLE_PERMISSIONS[member.role]
+  if (!user) return null
 
   const rows: { label: string; value: React.ReactNode }[] = [
-    { label: "Email",               value: member.collaborator.email },
-    { label: "Rôle",                value: <RolePill role={member.role} /> },
-    {
-      label: "Annotations ce mois",
-      value: <span className="text-emerald-600 font-medium">{member.annotations.toLocaleString("fr-FR")}</span>,
-    },
-    {
-      label: "Membre depuis",
-      value: new Date(member.joinedAt).toLocaleDateString("fr-FR", {
-        day: "numeric", month: "long", year: "numeric",
-      }),
-    },
+    { label: "Email",  value: user.email },
+    { label: "Rôle",   value: <RolePill role={member.role} /> },
+    { label: "Annotations ce mois",
+      value: <span className="text-emerald-600 font-medium">{member.annotations.toLocaleString("fr-FR")}</span> },
+    { label: "Membre depuis",
+      value: new Date(member.joinedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) },
     { label: "Dernière activité", value: member.lastActive },
-    {
-      label: "Permissions",
+    { label: "Permissions",
       value: (
         <div className="flex flex-col gap-1 items-end">
-          {member.role.permissions.map(p => (
+          {perms.map(p => (
             <div key={p} className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Check className="h-3 w-3 text-emerald-500 shrink-0" />
               {PERMISSION_LABELS[p]}
             </div>
           ))}
+          {perms.length === 0 && <span className="text-xs text-muted-foreground">Aucune permission</span>}
         </div>
       ),
     },
@@ -592,16 +462,13 @@ export function DialogDetails({ open, onOpenChange, member }: DialogDetailsProps
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Détails</DialogTitle>
-          <DialogDescription className="sr-only">
-            Fiche de {member.collaborator.name}
-          </DialogDescription>
+          <DialogDescription className="sr-only">Fiche de {user.name}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <MemberHeader member={member} />
           <div className="flex flex-col divide-y divide-border/40">
             {rows.map(row => (
-              <div key={row.label}
-                className="flex items-start justify-between gap-4 py-2.5">
+              <div key={row.label as string} className="flex items-start justify-between gap-4 py-2.5">
                 <span className="text-xs text-muted-foreground shrink-0">{row.label}</span>
                 <div className="text-xs text-right">{row.value}</div>
               </div>
@@ -616,49 +483,40 @@ export function DialogDetails({ open, onOpenChange, member }: DialogDetailsProps
   )
 }
 
-// ─────────────────────────────────────────────
-// 7. Dialog : Retirer de l'équipe
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. DialogRetirer — retirer un membre de l'équipe
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface DialogRetirerProps {
-  open:         boolean
-  onOpenChange: (open: boolean) => void
-  member:       TeamMember | null
-  onConfirm:    (collaboratorId: string) => void
-}
-
-export function DialogRetirer({
-  open, onOpenChange, member, onConfirm,
-}: DialogRetirerProps) {
+export function DialogRetirer({ open, onOpenChange, member, onConfirm }: {
+  open: boolean; onOpenChange: (v: boolean) => void
+  member: TeamMember | null
+  onConfirm: (userId: string) => void
+}) {
   if (!member) return null
+  const user = getUserById(member.userId)
+  if (!user) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Retirer de l'équipe</DialogTitle>
-          <DialogDescription className="sr-only">
-            Confirmer le retrait de {member.collaborator.name}
-          </DialogDescription>
+          <DialogDescription className="sr-only">Confirmer le retrait de {user.name}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex items-start gap-3 p-3 rounded-lg border border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20">
             <Trash2 className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
             <p className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
-              <strong>{member.collaborator.name}</strong> perdra immédiatement
-              l'accès à tous les datasets et tâches associés à cette équipe.
-              Cette action est irréversible.
+              <strong>{user.name}</strong> perdra l'accès à tous les datasets et tâches
+              de cette équipe. Il restera dans vos collaborateurs.
             </p>
           </div>
           <MemberHeader member={member} />
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Annuler
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Annuler</Button>
           <Button size="sm" variant="destructive"
-            onClick={() => { onConfirm(member.collaborator.id); onOpenChange(false) }}
-          >
+            onClick={() => { onConfirm(member.userId); onOpenChange(false) }}>
             Retirer de l'équipe
           </Button>
         </DialogFooter>
