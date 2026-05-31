@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ZoomIn, ZoomOut, RotateCw, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,8 +12,9 @@ export interface ImageViewerProps {
   filename: string
   index: number        // élément courant (1-based)
   total: number
-  onPrev: () => void
-  onNext: () => void
+  readonly?: boolean
+  onPrev?: () => void
+  onNext?: () => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -58,7 +60,7 @@ useEffect(() => {
       {/* ── Image area ── */}
       <div className="relative flex-1 overflow-hidden bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center select-none">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={src}
           alt={filename}
           className="max-w-full max-h-full object-contain transition-transform duration-200"
@@ -108,10 +110,10 @@ useEffect(() => {
 
         {/* Prev / Next */}
         <div className="flex items-center gap-1">
-          <ToolBtn onClick={onPrev} disabled={index <= 1}     label="Précédent">
+          <ToolBtn onClick={onPrev ?? (() => {})} disabled={index <= 1}     label="Précédent">
             <ChevronLeft size={14} />
           </ToolBtn>
-          <ToolBtn onClick={onNext} disabled={index >= total} label="Suivant">
+          <ToolBtn onClick={onNext ?? (() => {})  } disabled={index >= total} label="Suivant">
             <ChevronRight size={14} />
           </ToolBtn>
         </div>

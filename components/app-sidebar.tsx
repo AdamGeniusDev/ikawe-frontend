@@ -1,323 +1,237 @@
-"use client"
+'use client'
 
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-} from "@/components/ui/sidebar"
+  Sidebar, SidebarContent, SidebarFooter,
+  SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarHeader,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+} from '@/components/ui/sidebar'
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import {
-  LayoutDashboard,
-  CheckSquare,
-  Database,
-  PenTool,
-  Users,
-  Settings,
-  Search,
-  Bell,
-  X,
-  CheckCheck,
-  ChevronRight,
-  PlusCircle,
+  LayoutDashboard, CheckSquare, PenTool,
+  Users, Settings, Search, Bell,
+  PlusCircle, BookOpen, ClipboardCheck,
   type LucideIcon,
-  BookOpen,
-} from "lucide-react"
-import Image from "next/image"
-import Link from "next/link"
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
+} from 'lucide-react'
+import Image   from 'next/image'
+import Link    from 'next/link'
+import { useState } from 'react'
+import { usePathname }  from 'next/navigation'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { SearchDialog, getShortcutLabel } from '@/components/layout/SearchDialog'
+import { NotificationsDialog } from '@/components/layout/NotificationsDialog'
+import { useNotifications }    from '@/hooks/useNotifications'
+import { cn } from '@/lib/utils'
+import { CURRENT_USER, getUserById } from '@/constants/mock-data'
+import { getAvatarProps } from '@/types/user'
+import type { User, SessionUser } from '@/types/user'
 
-interface MenuItemProps {
-  title: string
-  icon: LucideIcon
-  url: string
+// NavRole — projection UI servant uniquement à filtrer les entrées de menu.
+// Dérivée du modèle de rôles canonique (platformRole + teamMemberships) via
+// deriveNavRole(). Ce n'est PAS un type de rôle métier supplémentaire.
+type NavRole = 'annotator' | 'reviewer' | 'admin'
+
+interface MenuItemDef {
+  title:  string
+  icon:   LucideIcon
+  url:    string
+  roles?: NavRole[]
+  exact?: boolean
 }
 
-const topMenuItems: MenuItemProps[] = [
-  { title: "Dashboard",  icon: LayoutDashboard, url: "/dashboard" },
-  { title: "Mes tâches", icon: CheckSquare,     url: "/tasks"     },
+const mainMenuItems: MenuItemDef[] = [
+  { title: 'Dashboard',  icon: LayoutDashboard, url: '/dashboard', exact: true },
+  { title: 'Mes tâches', icon: CheckSquare,     url: '/tasks',     roles: ['annotator', 'admin'] },
+  { title: 'Révisions',  icon: ClipboardCheck,  url: '/reviews',   roles: ['reviewer',  'admin'] },
 ]
 
-const datasetSubItems: MenuItemProps[] = [
-  { title: "Bibliothèques", icon: BookOpen,       url: "/datasets"     },
-  { title: "Annoter",      icon: PenTool,    url: "/annotate"     },
-  { title: "Ajouter",      icon: PlusCircle, url: "/datasets/upload" },
+const dataMenuItems: MenuItemDef[] = [
+  { title: 'Bibliothèques', icon: BookOpen,   url: '/datasets'         },
+  { title: 'Annoter',       icon: PenTool,    url: '/annotate',        roles: ['annotator', 'admin'] },
+  { title: 'Ajouter',       icon: PlusCircle, url: '/datasets/upload', roles: ['admin'] },
 ]
 
-const bottomMenuItems: MenuItemProps[] = [
-  { title: "Equipes", icon: Users,    url: "/team" },
-  { title: "Paramètres",     icon: Settings, url: "/settings"      },
+const accountMenuItems: MenuItemDef[] = [
+  { title: 'Équipes',    icon: Users,    url: '/team'     },
+  { title: 'Paramètres', icon: Settings, url: '/settings' },
 ]
 
-const notifications = [
-  {
-    id: 1,
-    title: "Nouvelle tâche assignée",
-    description: "Marie vous a assigné la tâche « Annotation dataset vol.3 »",
-    time: "Il y a 5 min",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Dataset mis à jour",
-    description: "Le dataset « Langues africaines v2 » a été mis à jour.",
-    time: "Il y a 1h",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "Nouveau collaborateur",
-    description: "Kofi Mensah a rejoint votre espace de travail.",
-    time: "Hier",
-    read: true,
-  },
-  {
-    id: 4,
-    title: "Export terminé",
-    description: "Votre export du dataset « Swahili corpus » est prêt.",
-    time: "Il y a 2 jours",
-    read: true,
-  },
-]
+// Dérive le rôle de navigation depuis le user canonique.
+// team_owner / team_admin / admin plateforme → accès complet ('admin').
+function deriveNavRole(session: SessionUser, full: User | undefined): NavRole {
+  if (session.platformRole === 'admin') return 'admin'
+  const roles = full?.teamMemberships.map(m => m.role) ?? []
+  if (roles.includes('team_owner') || roles.includes('team_admin')) return 'admin'
+  if (roles.includes('reviewer')) return 'reviewer'
+  return 'annotator'
+}
+
+function filterByRole(items: MenuItemDef[], role: NavRole): MenuItemDef[] {
+  return items.filter(item => !item.roles || item.roles.includes(role))
+}
+
+function resolveActiveUrl(items: MenuItemDef[], pathname: string): string | null {
+  let best: string | null = null
+  let bestLen = 0
+  for (const item of items) {
+    const matches = item.exact
+      ? pathname === item.url
+      : pathname === item.url || pathname.startsWith(item.url + '/')
+    if (matches && item.url.length > bestLen) {
+      best = item.url; bestLen = item.url.length
+    }
+  }
+  return best
+}
+
+function NavItem({ item, isActive }: { item: MenuItemDef; isActive: boolean }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild data-active={isActive}>
+        <Link href={item.url} className={cn(
+          'flex items-center gap-3 rounded-lg px-3 py-2 mx-1 text-sm transition-colors',
+          isActive
+            ? 'bg-secondary text-secondary-foreground font-semibold'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        )}>
+          <item.icon className="h-4 w-4 shrink-0" />
+          <span>{item.title}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+function MenuSection({ label, items, activeUrl }: {
+  label?: string; items: MenuItemDef[]; activeUrl: string | null
+}) {
+  if (items.length === 0) return null
+  return (
+    <SidebarGroup className="px-2 py-1">
+      {label && (
+        <SidebarGroupLabel className="px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 mb-1">
+          {label}
+        </SidebarGroupLabel>
+      )}
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5">
+          {items.map(item => (
+            <NavItem key={item.url} item={item} isActive={activeUrl === item.url} />
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
 
 export function AppSidebar() {
-  const [query, setQuery] = useState<string>("")
+  const pathname = usePathname()
+  const session  = CURRENT_USER
+  const fullUser = getUserById(session.id)
+  const navRole  = deriveNavRole(session, fullUser)
+  const avatar   = getAvatarProps({ id: session.id, name: session.name, avatarUrl: session.avatarUrl })
+
   const [searchOpen, setSearchOpen] = useState(false)
-  const [notifOpen, setNotifOpen] = useState(false)
-  const [notifs, setNotifs] = useState(notifications)
-  const [datasetsOpen, setDatasetsOpen] = useState(true)
+  const [notifOpen,  setNotifOpen]  = useState(false)
+  const shortcutLabel = getShortcutLabel()
 
-  const unreadCount = notifs.filter((n) => !n.read).length
+  const { notifs, markAllRead, unreadCount } = useNotifications()
 
-  const allMenuItems = [...topMenuItems, ...datasetSubItems, ...bottomMenuItems]
-  const filteredItems = allMenuItems.filter((item) =>
-    item.title.toLowerCase().includes(query.toLowerCase())
-  )
-
-  const markAllRead = () =>
-    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })))
+  const visibleMain    = filterByRole(mainMenuItems,    navRole)
+  const visibleData    = filterByRole(dataMenuItems,    navRole)
+  const visibleAccount = filterByRole(accountMenuItems, navRole)
+  const allItems       = [...visibleMain, ...visibleData, ...visibleAccount]
+  const activeUrl      = resolveActiveUrl(allItems, pathname)
 
   return (
     <>
-      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Rechercher</DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center gap-2 border rounded-md px-3 py-2">
-            <Search size={16} className="text-muted-foreground" />
-            <input
-              autoFocus
-              className="flex-1 bg-transparent outline-none text-sm"
-              placeholder="Rechercher une page, un dataset…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            {query && (
-              <button onClick={() => setQuery("")}>
-                <X size={14} className="text-muted-foreground" />
-              </button>
-            )}
-          </div>
-          <ul className="mt-2 space-y-1">
-            {filteredItems.length > 0 ? (
-              filteredItems.map((item) => (
-                <li key={item.url}>
-                  <Link
-                    href={item.url}
-                    onClick={() => setSearchOpen(false)}
-                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors"
-                  >
-                    <item.icon size={16} className="text-muted-foreground" />
-                    {item.title}
-                  </Link>
-                </li>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Aucun résultat pour « {query} »
-              </p>
-            )}
-          </ul>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={notifOpen} onOpenChange={setNotifOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="flex-row items-center justify-between space-y-0 pt-5">
-            <DialogTitle>Notifications</DialogTitle>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllRead}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <CheckCheck size={14} />
-                Tout marquer comme lu
-              </button>
-            )}
-          </DialogHeader>
-          <ul className="divide-y">
-            {notifs.map((n) => (
-              <li
-                key={n.id}
-                className={`py-3 px-1 flex items-start gap-3 ${
-                  !n.read ? "opacity-100" : "opacity-60"
-                }`}
-              >
-                <span
-                  className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${
-                    !n.read ? "bg-primary" : "bg-transparent"
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium leading-tight">{n.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                    {n.description}
-                  </p>
-                  <span className="text-[11px] text-muted-foreground/70 mt-1 block">
-                    {n.time}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
+      
+      <SearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        items={allItems}
+      />
+      <NotificationsDialog
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        notifs={notifs}
+        unreadCount={unreadCount}
+        markAllRead={markAllRead}
+      />
 
       <Sidebar>
-        <SidebarHeader className="border-b px-4 py-3">
-          <div className="flex flex-col items-start gap-3 pt-3">
-            <Link href="/dashboard" aria-label="Retour à l'accueil Ikawe">
-              <Image
-                src="/assets/logo.svg"
-                alt="Logo Ikawe"
-                width={140}
-                height={40}
-                priority
-                className="h-auto w-25"
-              />
-            </Link>
-            <p className="text-[12px] font-normal text-muted-foreground">
-              Plateforme de données africaines
-            </p>
-          </div>
+
+        <SidebarHeader className="border-b px-4 py-4 gap-3">
+          <Link href="/dashboard" aria-label="Retour à l'accueil Ikawe">
+            <Image src="/assets/logo.svg" alt="Logo Ikawe" width={140} height={40} priority className="h-auto w-28" />
+          </Link>
+          <p className="text-[11px] text-muted-foreground leading-none">
+            Plateforme de données africaines
+          </p>
+
+          {/* Bouton recherche — ouvre SearchDialog, affiche le raccourci détecté */}
           <button
             onClick={() => setSearchOpen(true)}
-            className="flex w-full items-center gap-2 bg-muted/50 hover:bg-white border border-transparent hover:border-border px-3 py-2 rounded-md my-1 text-muted-foreground hover:text-foreground transition-all cursor-text"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg border border-border/60',
+              'bg-muted/40 px-3 py-2 text-sm text-muted-foreground',
+              'hover:border-border hover:bg-muted hover:text-foreground',
+              'cursor-pointer transition-all group',
+            )}
+            aria-label="Ouvrir la recherche"
           >
-            <Search size={16} />
-            <span className="text-sm">Rechercher…</span>
+            <Search size={13} className="shrink-0" />
+            <span className="flex-1 text-left text-sm">Rechercher…</span>
+            <kbd className={cn(
+              'hidden sm:inline-flex items-center rounded border border-border/50',
+              'bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground/60',
+              'group-hover:border-border group-hover:text-muted-foreground transition-colors',
+            )}>
+              {shortcutLabel}
+            </kbd>
           </button>
         </SidebarHeader>
 
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-
-                {topMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.url} className="py-2">
-                    <SidebarMenuButton asChild>
-                      <a href={item.url} className="flex items-center gap-4 p-4">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-
-                <div className="my-1 border-border/50" />
-
-                <Collapsible open={datasetsOpen} onOpenChange={setDatasetsOpen}>
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton className="flex items-center gap-4 p-4 w-full">
-                        <Database className="h-4 w-4" />
-                        <span className="flex-1">Datasets</span>
-                        <ChevronRight
-                          className={`h-4 w-4 transition-transform duration-200 ${
-                            datasetsOpen ? "rotate-90" : ""
-                          }`}
-                        />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {datasetSubItems.map((item) => (
-                          <SidebarMenuSubItem key={item.url}>
-                            <SidebarMenuSubButton asChild>
-                              <a href={item.url} className="flex items-center gap-3">
-                                <item.icon className="h-3.5 w-3.5" />
-                                <span>{item.title}</span>
-                              </a>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </SidebarMenuItem>
-                </Collapsible>
-
-                <div className="my-1 border-border/50" />
-
-                {bottomMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.url} className="py-2">
-                    <SidebarMenuButton asChild>
-                      <a href={item.url} className="flex items-center gap-4 p-4">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+        <SidebarContent className="py-2 gap-0">
+          <MenuSection items={visibleMain} activeUrl={activeUrl} />
+          {visibleData.length > 0 && (
+            <><div className="mx-4 my-1 border-t border-border/30" />
+            <MenuSection label="Données" items={visibleData} activeUrl={activeUrl} /></>
+          )}
+          {visibleAccount.length > 0 && (
+            <><div className="mx-4 my-1 border-t border-border/30" />
+            <MenuSection label="Compte" items={visibleAccount} activeUrl={activeUrl} /></>
+          )}
         </SidebarContent>
 
-        <SidebarFooter className="border-t px-4 py-3">
-          <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2 min-w-0">
-              <Avatar>
-                <AvatarImage src="https://github.com/shadcn.png" />
-                <AvatarFallback>CN</AvatarFallback>
+        <SidebarFooter className="border-t px-3 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarImage src={avatar.avatarUrl} alt={session.name} />
+                <AvatarFallback className="text-xs font-semibold bg-secondary text-secondary-foreground">
+                  {avatar.initials}
+                </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col leading-tight min-w-0">
-                <span className="font-medium text-foreground truncate">Jean Dupont</span>
-                <span className="text-xs truncate">jean@example.com</span>
+              <div className="flex flex-col min-w-0 leading-tight">
+                <span className="text-[13px] font-medium text-foreground truncate">{session.name}</span>
+                <span className="text-[11px] text-muted-foreground truncate">{session.email}</span>
               </div>
             </div>
             <button
               onClick={() => setNotifOpen(true)}
-              className="relative shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors"
-              aria-label="Notifications"
+              className="relative shrink-0 flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} non lues)` : ''}`}
             >
-              <Bell size={18} />
+              <Bell size={16} />
               {unreadCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px] bg-secondary">
-                  {unreadCount}
-                </Badge>
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
               )}
             </button>
           </div>
         </SidebarFooter>
+
       </Sidebar>
     </>
   )

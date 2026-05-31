@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Copy, Check, FileJson, FileCode2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,9 +11,10 @@ export interface JsonViewerProps {
   filename:    string
   index:       number
   total:       number
+  readonly?:    boolean
   targetField?: string
-  onPrev:      () => void
-  onNext:      () => void
+  onPrev?:      () => void
+  onNext?:      () => void
 }
 
 // ─── Token types ─────────────────────────────────────────────────────────────
@@ -105,17 +106,21 @@ export default function JsonViewer({
   const [showRaw, setShowRaw] = useState(false)
   const [copied, setCopied]   = useState(false)
 
-  // Formate le JSON si possible, sinon affiche brut
-  const formatted = (() => {
+  const formatted = useMemo(() => {
     try {
       return JSON.stringify(JSON.parse(content), null, 2)
     } catch {
       return content
     }
-  })()
+  }, [content])
 
+  // 2. displayJson est maintenant stable et sécurisé pour le compilateur
   const displayJson = showRaw ? content : formatted
-  const tokens      = tokenize(displayJson, targetField)
+
+  // 3. Ajout de useMemo pour la tokenisation qui est une boucle lourde
+  const tokens = useMemo(() => {
+    return tokenize(displayJson, targetField)
+  }, [displayJson, targetField])
 
   const copy = useCallback(() => {
     navigator.clipboard.writeText(displayJson).then(() => {
@@ -184,9 +189,9 @@ export default function JsonViewer({
           {filename}
         </span>
         <div className="flex items-center gap-1">
-          <NavBtn onClick={onPrev} disabled={index <= 1}     label="Précédent"><ChevronLeft  size={14} /></NavBtn>
+          <NavBtn onClick={onPrev ?? (() => {})} disabled={index <= 1}     label="Précédent"><ChevronLeft  size={14} /></NavBtn>
           <span className="text-[10px] font-sans text-zinc-500 px-1">{index} / {total}</span>
-          <NavBtn onClick={onNext} disabled={index >= total} label="Suivant"><ChevronRight size={14} /></NavBtn>
+          <NavBtn onClick={onNext ?? (() => {})} disabled={index >= total} label="Suivant"><ChevronRight size={14} /></NavBtn>
         </div>
       </div>
     </div>

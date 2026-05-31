@@ -1,28 +1,33 @@
 "use client"
 
 // app/(root)/annotate/new/page.tsx
-// Stepper 4 étapes :
-//   1. Choisir le dataset
-//   2. Sélectionner les éléments
-//   3. Configurer l'annotation   (tâche + labels + options)
-//   4. Assigner les groupes      (JobAssignmentConfigurator)
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { CircleCheck, ArrowLeft, Layers } from "lucide-react"
 
-import { DatasetWorkspace }     from "@/components/datasets/dataset-workspace"
-import { ElementConfigurator, ElementConfig } from "@/components/datasets/elementConfigurator"
-import { AnnotationConfigurator, AnnotationConfig } from "@/components/datasets/annotationConfigurator"
-import { JobAssignmentConfigurator, JobAssignmentConfig, BATCH_SIZE } from "@/components/datasets/jobAssignmentConfigurator"
+import { DatasetWorkspace }         from "@/components/datasets/dataset-workspace"
+import { ElementConfigurator }      from "@/components/datasets/elementConfigurator"
+import type { ElementConfig }        from "@/components/datasets/elementConfigurator"
+import { AnnotationConfigurator }   from "@/components/datasets/annotationConfigurator"
+import type { AnnotationConfig }     from "@/components/datasets/annotationConfigurator"
+import {
+  JobAssignmentConfigurator,
+  DEFAULT_BATCH_SIZE,
+} from "@/components/datasets/jobAssignmentConfigurator"
+import type { JobAssignmentConfig }  from "@/components/datasets/jobAssignmentConfigurator"
+import { DatasetAccessPanel }        from "@/components/datasets/DatasetAccessPanel"
+import { useDatasetCollaborators }   from "@/hooks/useDatasetCollaborators"
 import {
   Stepper, StepperFooter, StepperIndicator, StepperItem, StepperList,
   StepperNext, StepperPanel, StepperPrevious, StepperSeparator,
   StepperTitle, StepperTrigger,
 } from "@/components/ui/stepper"
 
-import { CURRENT_USER, getAccessibleDatasets } from "@/constants/mock-data"
-import { Dataset } from "@/types/datasets"
+import { CURRENT_USER, getAccessibleDatasets, MOCK_TEAMS, MOCK_USERS } from "@/constants/mock-data"
+import type { Dataset, DatasetRole } from "@/types/datasets"
+import type { Team } from "@/types/team"
+import type { User } from "@/types/user"
 
 export default function AnnotateNew() {
   const router = useRouter()
@@ -32,44 +37,123 @@ export default function AnnotateNew() {
   const [elementConfigs,   setElementConfigs]   = useState<ElementConfig[]>([])
   const [annotationConfig, setAnnotationConfig] = useState<AnnotationConfig | null>(null)
   const [assignmentConfig, setAssignmentConfig] = useState<JobAssignmentConfig | null>(null)
+  const [accessSheetOpen,  setAccessSheetOpen]  = useState(false)
 
   const accessibleDatasets = getAccessibleDatasets(CURRENT_USER.id)
   const includedCount      = elementConfigs.filter(c => c.include).length
   const annotationReady    = annotationConfig !== null
-  const assignmentReady    = assignmentConfig !== null
-  const batchCount         = Math.max(1, Math.ceil(includedCount / BATCH_SIZE))
+  const assignmentReady    = assignmentConfig?.isSubmittable === true
+  const batchCount         = Math.max(1, Math.ceil(includedCount / DEFAULT_BATCH_SIZE))
+
+  const { users: collaborators, teams: assignedTeams } = useDatasetCollaborators(
+    selected,
+    CURRENT_USER.id,
+    MOCK_USERS,
+    MOCK_TEAMS,
+  )
+
+  // ── Sélection dataset ────────────────────────────────────────────────────────
+  const handleSelectDataset = useCallback((d: Dataset) => {
+    setSelected(prev => prev?.id === d.id ? null : d)
+    setElementConfigs([])
+    setAnnotationConfig(null)
+    setAssignmentConfig(null)
+  }, [])
+
+  // ── Mutations membres ────────────────────────────────────────────────────────
+
+  const handleAddMembers = useCallback((users: { user: User; role: DatasetRole }[]) => {
+    setSelected(prev => {
+      if (!prev) return prev
+      const newMembers = users
+        .filter(({ user }) => !prev.members.some(m => m.userId === user.id))
+        .map(({ user, role }) => ({
+          userId:    user.id,
+          name:      user.name,
+          role,
+          grantedAt: new Date().toISOString(),
+          grantedBy: CURRENT_USER.id,
+        }))
+      return { ...prev, members: [...prev.members, ...newMembers] }
+    })
+  }, [])
+
+  const handleAddMember = useCallback((user: User, role: DatasetRole) => {
+    handleAddMembers([{ user, role }])
+  }, [handleAddMembers])
+
+  const handleAddTeam = useCallback((team: Team) => {
+    setSelected(prev => {
+      if (!prev) return prev
+      if (prev.teamAssignments.some(ta => ta.teamId === team.id)) return prev
+      return {
+        ...prev,
+        teamAssignments: [
+          ...prev.teamAssignments,
+          {
+            teamId:     team.id,
+            teamName:   team.name,
+            assignedAt: new Date().toISOString(),
+            assignedBy: CURRENT_USER.id,
+          },
+        ],
+      }
+    })
+  }, [])
+
+  const handleRemoveMember = useCallback((userId: string) => {
+    setSelected(prev => prev
+      ? { ...prev, members: prev.members.filter(m => m.userId !== userId) }
+      : prev
+    )
+  }, [])
+
+  const handleRemoveTeam = useCallback((teamId: string) => {
+    setSelected(prev => prev
+      ? { ...prev, teamAssignments: prev.teamAssignments.filter(ta => ta.teamId !== teamId) }
+      : prev
+    )
+  }, [])
+
+  // ── Résumé footer étape 4 ────────────────────────────────────────────────────
+  const assignmentSummary = (() => {
+    if (!assignmentConfig) return null
+    const { pool, batchOverrides, batchCount: bc } = assignmentConfig
+    const slotCount     = pool.mode === 'teams' ? pool.teamIds.length : pool.annotatorIds.length
+    const overrideCount = batchOverrides.length
+    const hasReviewer   = pool.reviewMode === 'all' && !!pool.reviewerId
+    return { slotCount, overrideCount, batchCount: bc, hasReviewer, mode: pool.mode }
+  })()
 
   return (
     <div className="flex flex-col w-full min-h-screen">
 
       {/* Header */}
-      <div className="top-0 z-10 flex w-full px-6 items-center gap-3 py-3 border-b bg-white/70 dark:bg-zinc-900/70 backdrop-blur-sm">
-        <button
-          type="button"
-          onClick={() => router.push("/annotate")}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-        >
+      <div className="top-0 z-10 flex w-full px-6 items-center gap-3 py-3 border-b
+        bg-white/70 dark:bg-zinc-900/70 backdrop-blur-sm">
+        <button type="button" onClick={() => router.push("/annotate")}
+          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted-foreground
+            hover:text-foreground hover:bg-muted/40 transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Retour
         </button>
         <div className="h-4 w-px bg-border" />
         <div>
           <h1 className="font-bold text-[25px]">
-            Nouveau <span className="text-secondary">job</span>
+            Nouveau <span className="text-secondary">projet</span>
           </h1>
           <p className="text-[14px] text-muted-foreground">
-            Configurez un job d'annotation en 4 étapes
+            Configurez un projet d'annotation en 4 étapes
           </p>
         </div>
       </div>
 
       <Stepper value={step} onValueChange={setStep} className="w-full py-8 px-4">
         <StepperList>
-
           <StepperItem step={0} canContinue={!!selected}>
             <StepperTrigger>
               <StepperIndicator />
-              <StepperTitle>Choisir le dataset</StepperTitle>
+              <StepperTitle>Choisir le jeu de données</StepperTitle>
             </StepperTrigger>
             <StepperSeparator />
           </StepperItem>
@@ -85,7 +169,7 @@ export default function AnnotateNew() {
           <StepperItem step={2} canContinue={annotationReady}>
             <StepperTrigger>
               <StepperIndicator />
-              <StepperTitle>Configurer l'annotation</StepperTitle>
+              <StepperTitle>Configurer les tâches</StepperTitle>
             </StepperTrigger>
             <StepperSeparator />
           </StepperItem>
@@ -96,14 +180,13 @@ export default function AnnotateNew() {
               <StepperTitle>Assigner les groupes</StepperTitle>
             </StepperTrigger>
           </StepperItem>
-
         </StepperList>
 
-        {/* ── Étape 1 — Dataset ── */}
+        {/* ── Étape 1 — Choisir le jeu de données ──────────────────────────── */}
         <StepperPanel step={0}>
           <DatasetWorkspace
             datasets={accessibleDatasets}
-            onSelect={d => setSelected(prev => prev?.id === d.id ? null : d)}
+            onSelect={handleSelectDataset}
             selectedId={selected?.id}
           />
           <StepperFooter>
@@ -112,9 +195,11 @@ export default function AnnotateNew() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <CircleCheck className="h-4 w-4 text-primary" />
-                    <p className="font-semibold text-primary text-sm">Dataset sélectionné</p>
+                    <p className="font-semibold text-primary text-sm">Jeu de données sélectionné</p>
                   </div>
-                  <p className="text-xs text-muted-foreground font-semibold truncate">{selected.title}</p>
+                  <p className="text-xs text-muted-foreground font-semibold truncate">
+                    {selected.title}
+                  </p>
                 </div>
               )}
             </span>
@@ -122,7 +207,7 @@ export default function AnnotateNew() {
           </StepperFooter>
         </StepperPanel>
 
-        {/* ── Étape 2 — Éléments ── */}
+        {/* ── Étape 2 — Sélectionner les éléments ──────────────────────────── */}
         <StepperPanel step={1}>
           {selected && (
             <ElementConfigurator
@@ -142,7 +227,7 @@ export default function AnnotateNew() {
                   </div>
                   <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <Layers className="h-3 w-3" />
-                    → {batchCount} groupe{batchCount > 1 ? "s" : ""} de {BATCH_SIZE} max
+                    → {batchCount} groupe{batchCount > 1 ? "s" : ""} de {DEFAULT_BATCH_SIZE} max
                   </p>
                 </div>
               )}
@@ -154,7 +239,7 @@ export default function AnnotateNew() {
           </StepperFooter>
         </StepperPanel>
 
-        {/* ── Étape 3 — Annotation ── */}
+        {/* ── Étape 3 — Configurer les tâches ──────────────────────────────── */}
         <StepperPanel step={2}>
           {selected && (
             <AnnotationConfigurator
@@ -169,7 +254,9 @@ export default function AnnotateNew() {
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <CircleCheck className="h-4 w-4 text-primary" />
-                    <p className="font-semibold text-primary text-sm">{annotationConfig.taskName}</p>
+                    <p className="font-semibold text-primary text-sm">
+                      {annotationConfig.taskName}
+                    </p>
                   </div>
                   {annotationConfig.labels.length > 0 && (
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -199,29 +286,58 @@ export default function AnnotateNew() {
           </StepperFooter>
         </StepperPanel>
 
-        {/* ── Étape 4 — Assignation ── */}
+        {/* ── Étape 4 — Assigner les groupes ───────────────────────────────── */}
         <StepperPanel step={3}>
           {selected && (
-            <JobAssignmentConfigurator
-              dataset={selected}
-              elementConfigs={elementConfigs}
-              key={includedCount}
-              currentUserId={CURRENT_USER.id}
-              onConfigChange={setAssignmentConfig}
-            />
+            <>
+              <JobAssignmentConfigurator
+                dataset={selected}
+                elementConfigs={elementConfigs}
+                currentUserId={CURRENT_USER.id}
+                allUsers={collaborators}
+                allTeams={assignedTeams}
+                batchSize={DEFAULT_BATCH_SIZE}
+                persistKey={`job-overrides-${selected.id}`}
+                onConfigChange={setAssignmentConfig}
+                onManageAccess={() => setAccessSheetOpen(true)}
+              />
+
+              <DatasetAccessPanel
+                dataset={selected}
+                allTeams={MOCK_TEAMS}
+                allUsers={MOCK_USERS}
+                currentUserId={CURRENT_USER.id}
+                onAddMember={handleAddMember}
+                onAddMembers={handleAddMembers}
+                onAddTeam={handleAddTeam}
+                onRemoveMember={handleRemoveMember}
+                onRemoveTeam={handleRemoveTeam}
+                externalOpen={accessSheetOpen}
+                onExternalOpenChange={setAccessSheetOpen}
+                headless
+              />
+            </>
           )}
+
           <StepperFooter>
             <span className="max-w-[55%] block">
-              {assignmentConfig && (
+              {assignmentSummary && (
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <CircleCheck className="h-4 w-4 text-primary" />
                     <p className="font-semibold text-primary text-sm">
-                      {assignmentConfig.batchCount} groupe{assignmentConfig.batchCount > 1 ? "s" : ""} assigné{assignmentConfig.batchCount > 1 ? "s" : ""}
+                      {assignmentSummary.batchCount} groupe{assignmentSummary.batchCount > 1 ? "s" : ""} assigné{assignmentSummary.batchCount > 1 ? "s" : ""}
                     </p>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    {assignmentConfig.distributionMode === "sequential" ? "Séquentiel" : "Aléatoire"}
+                    {assignmentSummary.slotCount}{" "}
+                    {assignmentSummary.mode === 'teams' ? "équipe" : "personne"}{assignmentSummary.slotCount > 1 ? "s" : ""}
+                    {assignmentSummary.hasReviewer && " · avec relecture"}
+                    {assignmentSummary.overrideCount > 0 && (
+                      <span className="ml-1 text-amber-600 dark:text-amber-400">
+                        · {assignmentSummary.overrideCount} modification{assignmentSummary.overrideCount > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </p>
                 </div>
               )}
@@ -231,13 +347,12 @@ export default function AnnotateNew() {
               <button
                 type="button"
                 disabled={!assignmentReady}
-                onClick={() => {
-                  // TODO en production : POST /api/jobs → router.push(`/annotate/job/${newJobId}`)
-                  router.push("/annotate")
-                }}
-                className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                onClick={() => router.push("/annotate")}
+                className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2 text-sm font-semibold
+                  text-primary-foreground hover:bg-primary/90 disabled:opacity-40
+                  disabled:cursor-not-allowed transition-colors"
               >
-                Créer le job
+                Lancer le projet
               </button>
             </div>
           </StepperFooter>

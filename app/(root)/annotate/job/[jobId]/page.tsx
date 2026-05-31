@@ -1,21 +1,20 @@
 'use client'
 
 // app/(root)/annotate/job/[jobId]/page.tsx
-// Visuellement renommé "job" partout dans l'UI.
-// Groupes en cards (grid), pleine largeur, owner restreint à ses groupes assignés.
 
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ArrowLeft, CheckCircle2, Clock, Circle, ArrowRight,
+  ArrowLeft, ArrowRight,
   Layers, Zap, Users, BarChart3, Lock,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   MOCK_JOBS,
   getBatchesForJob, canAccessBatch,
-} from '@/constants/mock-data-annotate'
-import { MOCK_USERS } from '@/types/user' 
-import type { AnnotationBatch, BatchStatus } from '@/types/annotation'
+} from '@/constants/mock-data'
+import { MOCK_USERS } from '@/types/user'
+import { AnnotationJob, BATCH_STATUS_META, resolveBatchUserRole, type AnnotationBatch } from '@/types/annotation'
+import { resolveBatchCTA } from '@/lib/batch-cta'
 
 const CURRENT_USER = MOCK_USERS[0]
 
@@ -26,42 +25,30 @@ const TASK_LABEL: Record<string, string> = {
   sequence:       'NER / Séquence',
 }
 
-const STATUS_CONFIG: Record<BatchStatus, {
-  label: string; icon: React.ReactNode; className: string; barColor: string
-}> = {
-  pending:     { label: 'En attente', icon: <Circle       className="h-3 w-3" />, className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',              barColor: 'bg-zinc-300 dark:bg-zinc-600' },
-  in_progress: { label: 'En cours',   icon: <Clock        className="h-3 w-3" />, className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',            barColor: 'bg-primary' },
-  paused:      { label: 'En pause',   icon: <Clock        className="h-3 w-3" />, className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',         barColor: 'bg-amber-500' },
-  completed:   { label: 'Terminé',    icon: <CheckCircle2 className="h-3 w-3" />, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', barColor: 'bg-emerald-500' },
-  cancelled:   { label: 'Annulé',     icon: <Circle       className="h-3 w-3" />, className: 'bg-red-100 text-red-600',                                                      barColor: 'bg-red-400' },
-}
-
 function pct(batch: AnnotationBatch): number {
   const p = batch.progress
   if (!p || p.total === 0) return 0
   return Math.round(((p.annotated + p.skipped) / p.total) * 100)
 }
 
-function ctaLabel(batch: AnnotationBatch): string {
-  if (batch.status === 'paused')      return 'Reprendre'
-  if (batch.status === 'in_progress') return 'Continuer'
-  return 'Commencer'
-}
-
 // ─── GroupCard ────────────────────────────────────────────────────────────────
 
-function GroupCard({ batch, canAnnotate, onGo }: {
+function GroupCard({ batch, canAnnotate, job }: {
   batch:       AnnotationBatch
   canAnnotate: boolean
-  onGo:        () => void
+  job:         AnnotationJob
 }) {
   const progress = pct(batch)
-  const config   = STATUS_CONFIG[batch.status]
+  const config   = BATCH_STATUS_META[batch.status]
   const isDone   = batch.status === 'completed'
   const p        = batch.progress
+  const role     = resolveBatchUserRole(batch, CURRENT_USER.id, job.createdBy)
+  const cta      = resolveBatchCTA(batch.id, batch.status, role)
+  const router   = useRouter()
 
   const assigneeNames = batch.assignedTo
-    .map(uid => MOCK_USERS.find(u => u.userId === uid)?.name ?? uid)
+    ? [MOCK_USERS.find(u => u.id === batch.assignedTo)?.name ?? batch.assignedTo]
+    : []
 
   return (
     <div className={cn(
@@ -84,7 +71,7 @@ function GroupCard({ batch, canAnnotate, onGo }: {
               <span className="text-muted-foreground font-normal ml-1">/ {batch.batchTotal}</span>
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {p ? `${p.annotated + p.skipped} / ${p.total} éléments` : '—'}
+              {p ? `${p.annotated + p.skipped} / ${p.total} éléments traités` : '—'}
             </p>
           </div>
         </div>
@@ -92,7 +79,7 @@ function GroupCard({ batch, canAnnotate, onGo }: {
           'flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
           config.className
         )}>
-          {config.icon}
+          {config.icon && <config.icon className="h-3 w-3" />}
           {config.label}
         </span>
       </div>
@@ -106,7 +93,7 @@ function GroupCard({ batch, canAnnotate, onGo }: {
           />
         </div>
         <div className="flex justify-between">
-          <span className="text-[10px] text-muted-foreground">Progression</span>
+          <span className="text-[10px] text-muted-foreground">Avancement</span>
           <span className="text-[10px] font-semibold">{progress}%</span>
         </div>
       </div>
@@ -123,24 +110,25 @@ function GroupCard({ batch, canAnnotate, onGo }: {
 
       {/* Action */}
       <div className="mt-auto pt-2 border-t border-border/50">
-        {isDone ? (
-          <span className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Terminé
-          </span>
-        ) : canAnnotate ? (
+        {cta.href ? (
           <button
             type="button"
-            onClick={onGo}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            onClick={() => router.push(cta.href!)}
+            title={cta.tooltip}
+            className={cn(
+              'flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
+              cta.variant === 'primary'   && 'bg-primary text-primary-foreground hover:bg-primary/90',
+              cta.variant === 'secondary' && 'border border-border hover:bg-muted text-foreground',
+              cta.variant === 'warning'   && 'bg-orange-500 text-white hover:bg-orange-600',
+            )}
           >
-            {ctaLabel(batch)}
+            {cta.label}
             <ArrowRight className="h-3.5 w-3.5" />
           </button>
         ) : (
-          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground" title={cta.tooltip}>
             <Lock className="h-3 w-3 shrink-0" />
-            Assigné à un autre annotateur
+            {cta.label}
           </span>
         )}
       </div>
@@ -169,7 +157,7 @@ export default function JobDetailPage() {
   if (!job) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
-        <p className="text-sm text-muted-foreground">job introuvable.</p>
+        <p className="text-sm text-muted-foreground">Projet introuvable.</p>
         <button type="button" onClick={() => router.push('/annotate')}
           className="flex items-center gap-1.5 text-sm text-primary hover:underline">
           <ArrowLeft className="h-4 w-4" />
@@ -191,10 +179,10 @@ export default function JobDetailPage() {
     cancelled:   { label: 'Annulé',     className: 'bg-red-100 text-red-600' },
   }
   const statusMeta = JOB_STATUS[job.status] ?? JOB_STATUS.pending
-  const isOwner    = job.createdBy === CURRENT_USER.userId
+  const isOwner    = job.createdBy === CURRENT_USER.id
 
   const myAnnotableBatches = batches.filter(b =>
-    canAccessBatch(b, CURRENT_USER.userId)
+    canAccessBatch(b, CURRENT_USER.id)
   ).length
 
   return (
@@ -205,7 +193,7 @@ export default function JobDetailPage() {
         <button type="button" onClick={() => router.push('/annotate')}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors shrink-0">
           <ArrowLeft className="h-4 w-4" />
-          Annoter
+          Mes projets
         </button>
         <span className="text-muted-foreground/40">›</span>
         <span className="text-sm font-semibold text-secondary truncate">{job.datasetName}</span>
@@ -235,7 +223,7 @@ export default function JobDetailPage() {
             <span className="text-muted-foreground/30">·</span>
             <span>{totalEl} éléments</span>
             <span className="text-muted-foreground/30">·</span>
-            <span>{job.distributionMode === 'sequential' ? 'Séquentiel' : 'Aléatoire'}</span>
+            <span>{job.distributionMode === 'sequential' ? "Dans l'ordre" : 'Au hasard'}</span>
           </div>
         </div>
 
@@ -246,7 +234,7 @@ export default function JobDetailPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold flex items-center gap-1.5">
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                Progression globale
+                Avancement global
               </span>
               <span className="text-sm font-bold">{progress}%</span>
             </div>
@@ -269,7 +257,7 @@ export default function JobDetailPage() {
             </p>
             <p className="text-2xl font-bold text-primary">{myAnnotableBatches}</p>
             <p className="text-[11px] text-muted-foreground">
-              groupe{myAnnotableBatches > 1 ? 's' : ''} à annoter
+              groupe{myAnnotableBatches > 1 ? 's' : ''} à traiter
             </p>
           </div>
         </div>
@@ -292,7 +280,7 @@ export default function JobDetailPage() {
           <div className="flex items-center gap-2 rounded-xl border bg-muted/30 px-4 py-2.5 w-fit">
             <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <p className="text-[11px] text-muted-foreground">
-              Vous pouvez annoter uniquement les groupes qui vous sont assignés.
+              Vous pouvez travailler uniquement sur les groupes qui vous sont assignés.
             </p>
           </div>
         )}
@@ -307,8 +295,8 @@ export default function JobDetailPage() {
               <GroupCard
                 key={batch.id}
                 batch={batch}
-                canAnnotate={canAccessBatch(batch, CURRENT_USER.userId)}
-                onGo={() => router.push(`/annotate/${batch.id}`)}
+                canAnnotate={canAccessBatch(batch, CURRENT_USER.id)}
+                job={job}
               />
             ))}
           </div>

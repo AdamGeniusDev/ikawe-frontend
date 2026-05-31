@@ -59,9 +59,7 @@ export interface PendingInvite {
   sentAt: string
 }
 
-// Collaborator supprimé → utiliser User directement
-// Role supprimé → utiliser TeamRole + TEAM_ROLE_PERMISSIONS
-// COLOR_OPTIONS reste si tu en as besoin pour l'UI des badges
+
 export const COLOR_OPTIONS: { label: string; value: string }[] = [
   { label: 'Violet', value: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
   { label: 'Bleu',   value: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'         },
@@ -71,50 +69,4 @@ export const COLOR_OPTIONS: { label: string; value: string }[] = [
   { label: 'Rouge',  value: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'             },
 ]
 
-// MOCK_TEAMS corrigé — TeamMember référence userId, pas un objet Collaborator
-
-export const MOCK_TEAMS: Team[] = [
-  {
-    id: 'team-1',
-    name: 'Équipe NLP Francophone',
-    description: 'Spécialisée dans le texte et les entités nommées',
-    ownerId: 'user-owner',     // ← Jean Dupont depuis MOCK_USERS de user.ts
-    createdAt: '2026-01-10',
-    datasetIds: ['d1', 'd3', 'd4'],
-    members: [
-      { userId: 'user-kofi',    role: 'annotator', joinedAt: '2026-01-15', annotations: 2840, lastActive: 'Il y a 5 min' },
-      { userId: 'user-aminata', role: 'annotator', joinedAt: '2026-01-20', annotations: 1120, lastActive: 'Il y a 2h'    },
-      { userId: 'user-marie',   role: 'reviewer',  joinedAt: '2026-01-12', annotations: 560,  lastActive: 'Hier'         },
-    ],
-  },
-  {
-    id: 'team-2',
-    name: 'Équipe Vision & Audio',
-    description: 'Images, bounding boxes et transcriptions audio',
-    ownerId: 'user-owner',
-    createdAt: '2026-02-05',
-    datasetIds: ['d2', 'd5'],
-    members: [
-      { userId: 'user-marie', role: 'team_admin', joinedAt: '2026-02-10', annotations: 980,  lastActive: 'Il y a 1j' },
-      { userId: 'user-theo',  role: 'reviewer',   joinedAt: '2026-02-15', annotations: 560,  lastActive: 'Il y a 3j' },
-    ],
-  },
-]
-
-// ─── Datasets de référence ────────────────────────────────────────────────────
-
-export const MOCK_DATASETS: DatasetRef[] = [
-  { id: 'd1', name: 'smartphone_listings_v3.csv',  status: 'active'    },
-  { id: 'd2', name: 'phones_images_batch2',         status: 'active'    },
-  { id: 'd3', name: 'produits_telecom_dakar.json',  status: 'active'    },
-  { id: 'd4', name: 'reviews_abidjan_corpus.txt',   status: 'completed' },
-  { id: 'd5', name: 'audio_fon_yoruba_batch1',      status: 'active'    },
-]
-
-// ─── Invitations en attente ───────────────────────────────────────────────────
-
-export const MOCK_PENDING: PendingInvite[] = [
-  { id: 'p1', email: 'grace.kone@mail.com', sentAt: 'Il y a 2j' },
-  { id: 'p2', email: 'serge.akpo@mail.com', sentAt: 'Il y a 5j' },
-]
 

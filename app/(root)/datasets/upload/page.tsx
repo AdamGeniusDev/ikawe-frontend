@@ -25,7 +25,10 @@ import { TextFilePreview } from '@/components/upload/TextPreview'
 import { CsvFilePreview } from '@/components/upload/CsvPreview'
 
 
-type DataType = "audio" | "text" | "image" | ""
+// Sous-ensemble UI propre à l'upload (3 familles + "" = non sélectionné).
+// Distinct du DataType canonique de types/datasets.ts (qui inclut csv/json) :
+// ne PAS masquer le type global ici.
+type UploadKind = "audio" | "text" | "image" | ""
 type Visibility = "private" | "team" | "public"
 
 interface UploadedFile {
@@ -44,7 +47,7 @@ interface UploadedFile {
 
 const TASK_TYPES = [
   {
-    id: "audio" as DataType,
+    id: "audio" as UploadKind,
     label: "Speech / Audio",
     sub: "TTS, STT, Speaker ID",
     icon: FileAudio,
@@ -53,7 +56,7 @@ const TASK_TYPES = [
     validExts: ["wav", "mp3", "m4a", "ogg", "flac"],
   },
   {
-    id: "text" as DataType,
+    id: "text" as UploadKind,
     label: "Traduction",
     sub: "Multilingue, dialectes",
     icon: FileText,
@@ -62,7 +65,7 @@ const TASK_TYPES = [
     validExts: ["txt", "csv", "json", "tsv"],
   },
   {
-    id: "image" as DataType,
+    id: "image" as UploadKind,
     label: "Images",
     sub: "Classification, OCR",
     icon: ImageIcon,
@@ -98,7 +101,7 @@ const Upload = () => {
   const [step, setStep] = useState(0)
 
   // Step 1
-  const [dataType, setDataType] = useState<DataType>("")
+  const [dataType, setDataType] = useState<UploadKind>("")
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
 
@@ -310,9 +313,9 @@ const Upload = () => {
   const removeFile = (id: string) =>
     setUploadedFiles((prev) => prev.filter((f) => f.id !== id))
 
-  const pendingTypeChange = useRef<{ type: DataType; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const pendingTypeChange = useRef<{ type: UploadKind; timer: ReturnType<typeof setTimeout> } | null>(null)
 
-    const handleTaskTypeChange = (type: DataType) => {
+    const handleTaskTypeChange = (type: UploadKind) => {
       if (type === dataType) return
 
       // Annule un changement en attente

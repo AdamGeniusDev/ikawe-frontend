@@ -4,7 +4,7 @@
 // Deux niveaux de rôle dans Ikawe :
 //   PlatformRole   → droits globaux sur la plateforme (défini par l'admin système)
 //   TeamRole       → droits dans une équipe (défini par le team owner)
-//   BatchRole      → droits sur un batch précis (résolu depuis job.batchAssignments)
+//   BatchRole      → droits sur un batch précis (résolu depuis job.pool via distributePool())
 //
 // Flux de session :
 //   Login → JWT signé par le backend → stocké dans cookie httpOnly
@@ -60,7 +60,7 @@ export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
 }
 
 // Niveau 3 — Rôle sur un batch
-// Résolu automatiquement depuis job.batchAssignments par resolveAssignedUsers().
+// Résolu depuis job.pool via distributePool() / resolveBatchUserRole().
 // Peut avoir un roleOverride par batch (ex : quelqu'un est annotator dans l'équipe
 // mais reviewer sur ce batch précis).
 
@@ -208,9 +208,6 @@ export interface UserStats {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// USER — profil complet retourné par /api/me ou /api/users/[id]
-// ─────────────────────────────────────────────────────────────────────────────
 
 
 export interface User {
@@ -226,9 +223,7 @@ export interface User {
   platformRole: PlatformRole   // 'user' par défaut, 'admin' sur promotion
 
   // ── Collaboration ─────────────────────────────────────────────────────────
-  // IDs des users avec qui la collaboration est confirmée (statut 'accepted').
-  // Liste dénormalisée pour éviter un re-fetch au moment du rendu des équipes.
-  // Source de vérité : table collaboration_requests côté backend.
+
   collaboratorIds: string[]
 
   // ── Appartenance aux équipes ──────────────────────────────────────────────
@@ -263,7 +258,6 @@ export interface SessionUser {
   name:         string
   avatarUrl?:   string
   platformRole: PlatformRole
-  // collaboratorIds et teamMemberships non inclus — charger via GET /api/me si besoin
 }
 
 
@@ -271,7 +265,7 @@ export interface SessionUser {
 // AVATAR PROPS
 // ─────────────────────────────────────────────────────────────────────────────
 // Props calculées pour afficher un avatar n'importe où dans l'app.
-// Utiliser getAvatarProps() — jamais recalculer la logique manuellement.
+
 
 export interface AvatarProps {
   initials:   string   // "KB" depuis "Kofi Boateng"
@@ -419,8 +413,8 @@ export const MOCK_USERS: User[] = [
     platformRole: 'user',
     collaboratorIds: ['user-kofi', 'user-aminata', 'user-marie', 'user-theo'],
     teamMemberships: [
-      { teamId: 'team-1', teamName: 'Équipe NLP Francophone', role: 'team_owner', joinedAt: '2026-01-10' },
-      { teamId: 'team-2', teamName: 'Équipe Vision & Audio',  role: 'team_owner', joinedAt: '2026-02-05' },
+      { teamId: 'team_001', teamName: 'Équipe Cotonou',         role: 'team_owner', joinedAt: '2024-01-16' },
+      { teamId: 'team_002', teamName: 'Équipe West Africa NLP', role: 'team_owner', joinedAt: '2023-12-01' },
     ],
     emailVerified: true, twoFactorEnabled: false,
     lastLoginAt: new Date().toISOString(),
@@ -448,7 +442,8 @@ export const MOCK_USERS: User[] = [
     platformRole: 'user',
     collaboratorIds: ['user-owner', 'user-aminata'],
     teamMemberships: [
-      { teamId: 'team-1', teamName: 'Équipe NLP Francophone', role: 'annotator', joinedAt: '2026-01-15' },
+      { teamId: 'team_001', teamName: 'Équipe Cotonou',         role: 'annotator', joinedAt: '2024-04-05' },
+      { teamId: 'team_002', teamName: 'Équipe West Africa NLP', role: 'annotator', joinedAt: '2024-03-10' },
     ],
     emailVerified: true, twoFactorEnabled: false,
     lastLoginAt: '2026-05-18T14:30:00Z',
@@ -476,7 +471,7 @@ export const MOCK_USERS: User[] = [
     platformRole: 'user',
     collaboratorIds: ['user-owner', 'user-kofi'],
     teamMemberships: [
-      { teamId: 'team-1', teamName: 'Équipe NLP Francophone', role: 'annotator', joinedAt: '2026-01-20' },
+      { teamId: 'team_002', teamName: 'Équipe West Africa NLP', role: 'annotator', joinedAt: '2024-04-01' },
     ],
     emailVerified: true, twoFactorEnabled: false,
     lastLoginAt: '2026-05-17T09:00:00Z',
@@ -504,8 +499,8 @@ export const MOCK_USERS: User[] = [
     platformRole: 'user',
     collaboratorIds: ['user-owner', 'user-theo'],
     teamMemberships: [
-      { teamId: 'team-1', teamName: 'Équipe NLP Francophone', role: 'reviewer',   joinedAt: '2026-01-12' },
-      { teamId: 'team-2', teamName: 'Équipe Vision & Audio',  role: 'team_admin', joinedAt: '2026-02-10' },
+      { teamId: 'team_001', teamName: 'Équipe Cotonou',         role: 'reviewer', joinedAt: '2024-01-28' },
+      { teamId: 'team_002', teamName: 'Équipe West Africa NLP', role: 'reviewer', joinedAt: '2024-03-25' },
     ],
     emailVerified: true, twoFactorEnabled: true,
     lastLoginAt: new Date(Date.now() - 2 * 3600000).toISOString(),
@@ -533,7 +528,7 @@ export const MOCK_USERS: User[] = [
     platformRole: 'user',
     collaboratorIds: ['user-owner', 'user-marie'],
     teamMemberships: [
-      { teamId: 'team-2', teamName: 'Équipe Vision & Audio', role: 'reviewer', joinedAt: '2026-02-15' },
+      { teamId: 'team_001', teamName: 'Équipe Cotonou', role: 'annotator', joinedAt: '2024-02-20' },
     ],
     emailVerified: true, twoFactorEnabled: false,
     lastLoginAt: '2026-05-16T11:00:00Z',

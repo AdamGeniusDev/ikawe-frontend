@@ -2,6 +2,7 @@
 
 export type { DataType } from './datasets'
 import type { DataType } from './datasets'
+import type { Label } from './annotation'
 
 // ─── Statut ───────────────────────────────────────────────────────────────────
 
@@ -9,26 +10,15 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'paused'
 
 // ─── Labels ───────────────────────────────────────────────────────────────────
 
-export interface TaskLabel {
-  id:    string
-  name:  string
-  color: string
-}
 
-// ─── Révision ─────────────────────────────────────────────────────────────────
-// Un événement dans l'historique des révisions d'un batch.
-// Créé par le réviseur depuis /review/[batchId].
-//
-// action:
-//   'started'   → l'annotateur a commencé la tâche (événement système)
-//   'validated' → le réviseur a validé N annotations
-//   'rejected'  → le réviseur a rejeté N annotations avec un commentaire
+export type TaskLabel = Label
+
 
 export interface RevisionEvent {
   id:           string
   actorId:      string    // userId de qui a fait l'action
   actorName:    string    // nom affiché
-  actorUrl?: string   // pour l'avatar
+  actorAvatarUrl?: string // URL photo de profil (optionnel — fallback vers initiales)
   action:       'started' | 'validated' | 'rejected'
   count?:       number    // nb d'éléments concernés
   comment?:     string    // message du réviseur (rejet uniquement)
@@ -70,117 +60,5 @@ export const STATUS_META: Record<TaskStatus, { label: string; className: string 
   paused:      { label: 'En pause',   className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
 
-export const MOCK_TASKS: Task[] = [
-  {
-    id: 'task-001', jobId: 'job-001', ownerId: 'user-owner',
-    title: 'Annotation images — Véhicules urbains',
-    datasetSource: 'Dataset Mobilité v2', dataType: 'image',
-    totalElements: 1200, completedElements: 840, deadline: '2026-05-15',
-    status: 'in_progress',
-    labels: [
-      { id: 'l1', name: 'Voiture',  color: '#3b82f6' },
-      { id: 'l2', name: 'Moto',     color: '#8b5cf6' },
-      { id: 'l3', name: 'Camion',   color: '#f97316' },
-      { id: 'l4', name: 'Bus',      color: '#22c55e' },
-      { id: 'l5', name: 'Vélo',     color: '#06b6d4' },
-      { id: 'l6', name: 'Tricycle', color: '#eab308' },
-      { id: 'l7', name: 'Piéton',   color: '#ec4899' },
-      { id: 'l8', name: 'Autre',    color: '#94a3b8' },
-    ],
-    instructions:   `Dessinez des bounding boxes autour de chaque véhicule visible dans l'image. Incluez les véhicules partiellement visibles en bordure.\n\n• Un box par véhicule, bien ajusté\n• Ignorer les panneaux de signalisation\n• En cas de doute, passer à l'élément suivant`,
-    acceptanceRate: 94,
-    reviewedCount:  840,
-    assignedByName: 'Jean Dupont',
-    revisionHistory: [
-      {
-        id: 'rev-003',
-        actorId: 'user-marie', actorName: 'Marie K.',
-        actorInitials: 'MK', actorColor: '#8b5cf6',
-        action: 'validated', count: 840,
-        createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-      },
-      {
-        id: 'rev-002',
-        actorId: 'user-marie', actorName: 'Marie K.',
-        actorInitials: 'MK', actorColor: '#8b5cf6',
-        action: 'rejected', count: 3,
-        comment: 'Les boxes sur les éléments #312, #456, #789 sont trop larges — recadrer précisément sur le véhicule uniquement.',
-        elementIds: ['b001-1-el-312', 'b001-1-el-456', 'b001-1-el-789'],
-        createdAt: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
-      },
-      {
-        id: 'rev-001',
-        actorId: 'user-owner', actorName: 'Vous',
-        actorInitials: 'JD', actorColor: '#3b82f6',
-        action: 'started',
-        createdAt: '2026-04-10T08:00:00Z',
-      },
-    ],
-  },
-  {
-    id: 'task-002', jobId: 'job-002', ownerId: 'user-owner',
-    title: 'Classification audio — Bruits de fond',
-    datasetSource: 'AudioSet West Africa', dataType: 'audio',
-    totalElements: 500, completedElements: 500, deadline: '2026-04-01',
-    status: 'completed',
-    labels: [{ id: 'l9', name: 'IA acoustique', color: '#8b5cf6' }],
-    acceptanceRate: 98, reviewedCount: 500,
-    assignedByName: 'Jean Dupont',
-    revisionHistory: [
-      {
-        id: 'rev-004',
-        actorId: 'user-marie', actorName: 'Marie K.',
-        actorInitials: 'MK', actorColor: '#8b5cf6',
-        action: 'validated', count: 500,
-        createdAt: '2026-04-02T10:00:00Z',
-      },
-      {
-        id: 'rev-005',
-        actorId: 'user-owner', actorName: 'Vous',
-        actorInitials: 'JD', actorColor: '#3b82f6',
-        action: 'started',
-        createdAt: '2026-03-20T08:00:00Z',
-      },
-    ],
-  },
-  {
-    id: 'task-003', jobId: 'job-003', ownerId: 'user-owner',
-    title: 'Revue CSV — Transactions e-commerce',
-    datasetSource: 'Export Shopify Q1', dataType: 'csv',
-    totalElements: 3400, completedElements: 0, deadline: '2026-06-30',
-    status: 'pending', labels: [],
-    instructions: 'Classifiez chaque transaction selon la catégorie de produit.\n\n• En cas d\'ambiguïté, choisissez la catégorie la plus proche\n• Les transactions annulées → catégorie "Remboursement"',
-    assignedByName: 'Jean Dupont',
-  },
-  {
-    id: 'task-004', jobId: 'job-004', ownerId: 'user-kofi',
-    title: 'Annotation texte — Avis produits',
-    datasetSource: 'Scraping ComeUp 2025', dataType: 'text',
-    totalElements: 800, completedElements: 320, deadline: '2026-05-20',
-    status: 'paused',
-    labels: [{ id: 'l10', name: 'NLP', color: '#0ea5e9' }],
-    assignedByName: 'Kofi Boateng',
-  },
-  {
-    id: 'task-005', jobId: 'job-005', ownerId: 'user-owner',
-    title: 'Labellisation JSON — Capteurs IoT',
-    datasetSource: 'SmartCity Cotonou', dataType: 'json',
-    totalElements: 650, completedElements: 210, deadline: '2026-07-10',
-    status: 'in_progress',
-    labels: [{ id: 'l11', name: 'IoT', color: '#22c55e' }],
-    acceptanceRate: 87, reviewedCount: 210,
-    assignedByName: 'Jean Dupont',
-  },
-  {
-    id: 'task-006', jobId: 'job-006', ownerId: 'user-owner',
-    title: 'Annotation images — Maladies des plantes',
-    datasetSource: 'AgriData Bénin', dataType: 'image',
-    totalElements: 2000, completedElements: 2000, deadline: '2026-03-28',
-    status: 'completed',
-    labels: [{ id: 'l12', name: 'Agriculture', color: '#84cc16' }],
-    acceptanceRate: 91, reviewedCount: 2000,
-    assignedByName: 'Jean Dupont',
-  },
-]
+

@@ -12,8 +12,9 @@ export interface CsvViewerProps {
   filename: string
   index: number
   total: number
-  onPrev: () => void
-  onNext: () => void
+  readonly?: boolean
+  onPrev?: () => void
+  onNext?: () => void
   /** Column to highlight (used to draw attention to the target field) */
   targetColumn?: string
 }
@@ -134,9 +135,9 @@ export default function CsvViewer({
         )}
 
         <div className="flex items-center gap-1">
-          <NavBtn onClick={onPrev} disabled={index <= 1}     label="Précédent"><ChevronLeft size={14} /></NavBtn>
+          <NavBtn onClick={onPrev ?? (() => {})} disabled={index <= 1}     label="Précédent"><ChevronLeft size={14} /></NavBtn>
           <span className="text-[10px] text-zinc-400 px-1">{index} / {total}</span>
-          <NavBtn onClick={onNext} disabled={index >= total} label="Suivant"><ChevronRight size={14} /></NavBtn>
+          <NavBtn onClick={onNext ?? (() => {})} disabled={index >= total} label="Suivant"><ChevronRight size={14} /></NavBtn>
         </div>
       </div>
     </div>

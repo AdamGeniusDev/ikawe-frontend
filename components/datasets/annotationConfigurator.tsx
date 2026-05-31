@@ -10,20 +10,16 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Dataset, TaskType } from "@/types/datasets"
+import type { Label } from "@/types/annotation"
 import { ElementConfig } from "@/components/datasets/elementConfigurator"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface AnnotationLabel {
-  id:    string
-  name:  string
-  color: string
-}
+// Les labels réutilisent le type canonique Label ({ id, name, color }).
 
 export interface AnnotationConfig {
   taskType:      TaskType
   taskName:      string
-  labels:        AnnotationLabel[]
+  labels:        Label[]
   allowMultiple: boolean
   allowSkip:     boolean
   instructions?: string   
@@ -132,7 +128,7 @@ function TaskCard({ task, selected, onSelect }: { task: TaskDefinition; selected
 }
 
 function LabelRow({ label, onRemove, onChange }: {
-  label: AnnotationLabel; onRemove: () => void; onChange: (u: AnnotationLabel) => void
+  label: Label; onRemove: () => void; onChange: (u: Label) => void
 }) {
   const [showPalette, setShowPalette] = useState(false)
   return (
@@ -178,7 +174,7 @@ export function AnnotationConfigurator({
   const tasks = TASKS_BY_TYPE[dataset.dataType] ?? DEFAULT_TASKS
 
   const [selectedTaskType, setSelectedTaskType] = useState<TaskType | null>(null)
-  const [labels,           setLabels]           = useState<AnnotationLabel[]>([])
+  const [labels,           setLabels]           = useState<Label[]>([])
   const [allowMultiple,    setAllowMultiple]     = useState(false)
   const [allowSkip,        setAllowSkip]         = useState(true)
   const [instructions,     setInstructions]      = useState("")   // ← NOUVEAU
@@ -196,7 +192,7 @@ export function AnnotationConfigurator({
   }, [labels])
 
   const removeLabel = useCallback((id: string) => setLabels(prev => prev.filter(l => l.id !== id)), [])
-  const updateLabel = useCallback((updated: AnnotationLabel) => {
+  const updateLabel = useCallback((updated: Label) => {
     setLabels(prev => prev.map(l => l.id === updated.id ? updated : l))
   }, [])
 

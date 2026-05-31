@@ -99,7 +99,6 @@ export interface SettingsStore {
   updateStorage: (data: Partial<StorageState>) => void
   updateSecurity: (data: Partial<SecurityState>) => void
 
-  /** Met à jour un seul raccourci clavier */
   updateShortcut: (key: ShortcutKey, value: string) => void
   /** Remet les raccourcis à leurs valeurs par défaut */
   resetShortcuts: () => void

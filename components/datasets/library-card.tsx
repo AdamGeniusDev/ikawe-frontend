@@ -4,6 +4,7 @@ import { AudioLines, Download, FileText, Heart, ImageIcon, Sheet } from "lucide-
 import { Dataset } from "@/types/datasets"
 import { Button } from "../ui/button"
 import { getUserById } from "@/constants/mock-data"
+import { getAvatarProps } from "@/types/user"
 import { useRouter } from "next/navigation"
 import { formatCount } from "@/lib/utils"
 import Link from "next/link"
@@ -54,8 +55,9 @@ export function LibraryCard({
   onBuy,
   onLike,
 }: LibraryCardProps) {
-  const router = useRouter()
-  const author = getUserById(dataset.ownerId)
+  const router       = useRouter()
+  const author       = getUserById(dataset.ownerId)
+  const authorAvatar = author ? getAvatarProps(author) : null
 
   function handleLike(e: React.MouseEvent) {
     e.stopPropagation()
@@ -81,7 +83,7 @@ export function LibraryCard({
       className="flex flex-col h-full rounded-xl border bg-white dark:bg-zinc-900 p-4 gap-3 cursor-pointer hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-600 transition-all duration-200"
     >
 
-      {/* ── Zone haute — hauteur fixe ── */}
+      {/* ── Zone haute ── */}
 
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -103,7 +105,7 @@ export function LibraryCard({
         {dataset.description}
       </p>
 
-      {/* ── Zone flexible — absorbe la différence de hauteur entre cards ── */}
+      {/* ── Zone flexible ── */}
 
       <div className="flex-1 flex flex-col justify-end gap-3">
 
@@ -141,7 +143,7 @@ export function LibraryCard({
 
       </div>
 
-      {/* ── Footer — toujours collé en bas ── */}
+      {/* ── Footer ── */}
 
       <div className="h-px bg-zinc-100 dark:bg-zinc-800" />
 
@@ -149,14 +151,13 @@ export function LibraryCard({
 
         <div className="flex items-center gap-3">
 
-          {/* Auteur — lien vers le profil, stopPropagation pour ne pas déclencher handleCardClick */}
-          {author && (
+          {author && authorAvatar && (
             <div className="flex items-center gap-1.5">
               <div
                 className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-medium text-white shrink-0"
-                style={{ backgroundColor: author.avatarColor }}
+                style={{ backgroundColor: authorAvatar.color }}
               >
-                {author.avatarInitials}
+                {authorAvatar.initials}
               </div>
               <Link
                 href={`/profile/${author.id}`}
@@ -165,7 +166,7 @@ export function LibraryCard({
               >
                 @{author.name.split(" ").join("").toLocaleLowerCase()}
               </Link>
-              {author.role === "admin" && (
+              {author.platformRole === "admin" && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">
                   Vérifié
                 </span>

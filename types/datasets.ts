@@ -1,6 +1,9 @@
 // types/datasets.ts
 // SOURCE DE VÉRITÉ — DataType, Dataset et tout ce qui concerne les datasets.
 
+import { Team } from "./team"
+import { User } from "./user"
+
 
 export type DataType =
   | 'image'
@@ -34,6 +37,39 @@ export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   captioning:     'Captioning',
 }
 
+
+
+export const VALID_TASK_TYPES_BY_DATA: Record<DataType, TaskType[]> = {
+  image: ['classification', 'bounding_box', 'captioning'],
+  text:  ['classification', 'sequence'],
+  audio: ['classification', 'transcription'],
+  csv:   ['classification'],
+  json:  ['classification'],
+}
+
+export function getValidTaskTypes(dataType: DataType): TaskType[] {
+  return VALID_TASK_TYPES_BY_DATA[dataType]
+}
+
+export function isValidTaskCombination(dataType: DataType, taskType: TaskType): boolean {
+  return VALID_TASK_TYPES_BY_DATA[dataType].includes(taskType)
+}
+
+
+
+export type DatasetElementStatus = 'unannotated' | 'in_review' | 'rejected' | 'annotated'
+
+export interface DatasetElementUI {
+  id:               string
+  name:             string              // nom de fichier affiché
+  type:             DataType
+  previewUrl?:      string              // URL de prévisualisation (image) ou placeholder
+  sizeBytes?:       number              // pour les images
+  durationSeconds?: number              // pour les audios
+  wordCount?:       number              // pour text / json / csv
+  status?:          DatasetElementStatus
+}
+
 // ─── Statuts ──────────────────────────────────────────────────────────────────
 // draft      → dataset uploadé, pas encore configuré (titre, description manquants)
 // active     → configuré, prêt à recevoir des jobs d'annotation
@@ -50,9 +86,7 @@ export type DatasetStatus =
 
 export type DatasetVisibility = 'private' | 'team' | 'public'
 
-// ─── Rôles dataset ────────────────────────────────────────────────────────────
-// Droits d'un membre sur ce dataset spécifiquement.
-// Distinct des Permission dans team.ts qui sont des droits globaux dans l'équipe.
+
 
 export type DatasetRole =
   | 'viewer'
@@ -120,4 +154,68 @@ export interface Dataset {
   createdAt:    Date
   updatedAt:    Date
   completedAt?: Date   // optionnel : rempli quand status passe à 'completed'
+}
+
+export function resolveDatasetAccess(
+  dataset:       Dataset,
+  allTeams:      Team[],
+  allUsers:      User[],
+  currentUserId: string,
+): User[] {
+  // Membres individuels explicites
+  const individualIds = new Set(dataset.members.map(m => m.userId))
+
+  // Membres via équipes assignées
+  const teamMemberIds = new Set(
+    dataset.teamAssignments.flatMap(ta => {
+      const team = allTeams.find(t => t.id === ta.teamId)
+      return team ? team.members.map(m => m.userId) : []
+    })
+  )
+
+  const allIds = new Set([...individualIds, ...teamMemberIds])
+  allIds.delete(currentUserId)
+
+  return allUsers.filter(u => allIds.has(u.id))
+}
+
+
+export function resolveUserDatasetRole(
+  dataset:  Dataset,
+  userId:   string,
+  allTeams: Team[],
+): DatasetRole | undefined {
+  // Rôle individuel explicite — priorité max
+  const directMember = dataset.members.find(m => m.userId === userId)
+  if (directMember) return directMember.role
+
+  // Rôle via équipe + éventuel override
+  for (const ta of dataset.teamAssignments) {
+    const team = allTeams.find(t => t.id === ta.teamId)
+    if (!team) continue
+    const inTeam = team.members.some(m => m.userId === userId)
+    if (!inTeam) continue
+    // Override individuel dans cette assignment d'équipe
+    const override = ta.memberRoleOverrides?.[userId]
+    if (override) return override
+    // Rôle par défaut de l'équipe = annotator (tu peux le configurer)
+    return 'annotator'
+  }
+
+  return undefined
+}
+
+//verifie si un user a accès à un dataset (en tant que owner, membre individuel ou via équipe assignée)
+
+export function hasDatasetAccess(
+  dataset:  Dataset,
+  userId:   string,
+  allTeams: Team[],
+): boolean {
+  if (dataset.ownerId === userId) return true
+  if (dataset.members.some(m => m.userId === userId)) return true
+  return dataset.teamAssignments.some(ta => {
+    const team = allTeams.find(t => t.id === ta.teamId)
+    return team?.members.some(m => m.userId === userId) ?? false
+  })
 }

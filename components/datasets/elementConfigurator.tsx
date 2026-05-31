@@ -3,26 +3,10 @@
 import { useEffect, useMemo, useCallback, useState } from "react"
 import { ImageIcon, Music, FileText, Check, Info, EyeOff, Maximize2, Play, Eye } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Dataset } from "@/types/datasets"
+import { Dataset, DatasetElementUI, DataType,DatasetElementStatus } from "@/types/datasets"
 import { ElementPreviewModal } from "./elementConfigModal"
 
-// ─────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────
 
-export type DatasetElementType = "image" | "audio" | "text" | "csv" | "json"
-type FilterValue = "all" | "unannotated" | "in_review" | "rejected" | "annotated"
-
-export interface DatasetElement {
-  id: string
-  name: string
-  type: DatasetElementType
-  previewUrl?: string
-  sizeBytes?: number
-  durationSeconds?: number
-  wordCount?: number
-  status?: "unannotated" | "in_review" | "rejected" | "annotated"
-}
 
 export interface ElementConfig {
   id: string
@@ -35,6 +19,8 @@ export interface ElementConfiguratorProps {
   className?: string
 }
 
+type FilterValue = "all" | DatasetElementStatus
+
 // ─────────────────────────────────────────────
 // MOCK
 // ─────────────────────────────────────────────
@@ -44,17 +30,17 @@ function generateMockElements(
   dataType: string,
   totalFiles: number,
   annotatedFiles: number,
-): DatasetElement[] {
-  const type = dataType as DatasetElementType
-  const total = Math.min(totalFiles, 24)
-  const statusPool: DatasetElement["status"][] = [
+): DatasetElementUI[] {
+  const type = dataType as DataType
+  const total = Math.min(totalFiles, 200)
+  const statusPool: DatasetElementUI["status"][] = [
     "unannotated", "unannotated", "unannotated",
     "annotated", "in_review", "rejected",
   ]
 
   return Array.from({ length: total }, (_, i) => {
     const idx = i + 1
-    const el: DatasetElement = {
+    const el: DatasetElementUI = {
       id:   `${id}_el_${String(idx).padStart(3, "0")}`,
       name: type === "image" ? `img_${String(idx).padStart(3, "0")}.jpg`
           : type === "audio" ? `audio_${String(idx).padStart(3, "0")}.mp3`
@@ -90,7 +76,7 @@ function formatDuration(secs?: number) {
   return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`
 }
 
-function elementMeta(el: DatasetElement) {
+function elementMeta(el: DatasetElementUI) {
   if (el.type === "image") return formatSize(el.sizeBytes)
   if (el.type === "audio") return formatDuration(el.durationSeconds)
   return el.wordCount ? `${el.wordCount} mots` : null
@@ -100,13 +86,13 @@ function elementMeta(el: DatasetElement) {
 // PETITS COMPOSANTS
 // ─────────────────────────────────────────────
 
-function TypeIcon({ type, className }: { type: DatasetElementType; className?: string }) {
+function TypeIcon({ type, className }: { type: DataType; className?: string }) {
   if (type === "image") return <ImageIcon className={cn("text-blue-500",   className)} />
   if (type === "audio") return <Music     className={cn("text-violet-500", className)} />
   return                       <FileText  className={cn("text-amber-500",  className)} />
 }
 
-function StatusBadge({ status }: { status?: DatasetElement["status"] }) {
+function StatusBadge({ status }: { status?: DatasetElementUI["status"] }) {
   if (!status || status === "unannotated") return null
   const styles: Record<string, string> = {
     in_review: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
@@ -124,7 +110,7 @@ function StatusBadge({ status }: { status?: DatasetElement["status"] }) {
 }
 
 // Icône du bouton de prévisualisation selon le type
-function PreviewIcon({ type }: { type: DatasetElementType }) {
+function PreviewIcon({ type }: { type: DataType }) {
   if (type === "image") return <Maximize2 className="h-3 w-3" />
   if (type === "audio") return <Play      className="h-3 w-3" />
   return                       <Eye       className="h-3 w-3" />
@@ -135,7 +121,7 @@ function PreviewIcon({ type }: { type: DatasetElementType }) {
 // ─────────────────────────────────────────────
 
 function FilterBar({ elements, active, onChange }: {
-  elements: DatasetElement[]
+  elements: DatasetElementUI[]
   active: FilterValue
   onChange: (v: FilterValue) => void
 }) {
@@ -182,7 +168,7 @@ function FilterBar({ elements, active, onChange }: {
 // ─────────────────────────────────────────────
 
 export function CardGrid({ element, config, onToggle }: {
-  element: DatasetElement
+  element: DatasetElementUI
   config: ElementConfig
   onToggle: () => void
 }) {
@@ -317,10 +303,10 @@ export function ElementConfigurator({ dataset, onConfigChange, className }: Elem
       </div>
 
       {/* Notice aperçu limité */}
-      {totalFiles > 24 && (
+      {totalFiles > 200 && (
         <p className="text-xs text-muted-foreground -mt-2 flex items-center gap-1.5">
           <Info className="h-3 w-3 shrink-0" />
-          Aperçu limité à 24 éléments sur {totalFiles.toLocaleString("fr")} au total.
+          Aperçu limité à 200 éléments sur {totalFiles.toLocaleString("fr")} au total.
         </p>
       )}
 

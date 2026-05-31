@@ -17,7 +17,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/ui/data-table"
 import { buildColumns } from "./columns"
-import { Task, MOCK_TASKS } from "@/types/tasks"
+import { Task } from "@/types/tasks"
+import { MOCK_TASKS } from "@/constants/mock-data"
 
 // ─── Utilisateur courant ──────────────────────────────────────────────────────
 // Changer en 'user-kofi' pour tester la vue annotateur sans droits owner

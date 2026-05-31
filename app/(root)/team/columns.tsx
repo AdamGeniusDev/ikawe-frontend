@@ -9,6 +9,21 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { TeamMember } from "@/types/team"
+import { User, TEAM_ROLE_LABELS } from "@/types/user"
+import { getAvatarProps } from "@/types/user"
+import Image from "next/image"
+
+// Couleur de badge par rôle — local à ce fichier, pas besoin dans les types
+const ROLE_BADGE_COLORS: Record<string, string> = {
+  team_owner: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  team_admin: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  reviewer:   "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  annotator:  "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  viewer:     "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+}
+
+// La ligne = TeamMember enrichi avec son User (aplati par le parent)
+export type TeamMemberRow = TeamMember & { user: User }
 
 interface ActionHandlers {
   onChangeRole: (m: TeamMember) => void
@@ -16,24 +31,36 @@ interface ActionHandlers {
   onRemove:     (m: TeamMember) => void
 }
 
-export function buildColumns(handlers: ActionHandlers): ColumnDef<TeamMember>[] {
+export function buildColumns(handlers: ActionHandlers): ColumnDef<TeamMemberRow>[] {
   return [
     {
       id: "member",
       header: "Membre",
       cell: ({ row }) => {
-        const { collaborator } = row.original
+        const { user } = row.original
+        const avatar = getAvatarProps(user)
+
         return (
           <div className="flex items-center gap-2.5">
-            <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-              collaborator.avatarColor
-            )}>
-              {collaborator.initials}
-            </div>
+            {avatar.avatarUrl ? (
+              <Image
+                src={avatar.avatarUrl}
+                alt={user.name}
+                width={32}
+                height={32}
+                className="w-8 h-8 rounded-full object-cover shrink-0"
+              />
+            ) : (
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                style={{ backgroundColor: avatar.color }}
+              >
+                {avatar.initials}
+              </div>
+            )}
             <div className="min-w-0">
-              <p className="text-xs font-medium truncate">{collaborator.name}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{collaborator.email}</p>
+              <p className="text-xs font-medium truncate">{user.name}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
             </div>
           </div>
         )
@@ -43,10 +70,10 @@ export function buildColumns(handlers: ActionHandlers): ColumnDef<TeamMember>[] 
       id: "role",
       header: "Rôle",
       cell: ({ row }) => {
-        const { role } = row.original
+        const role = row.original.role
         return (
-          <span className={cn("text-[10px] font-medium px-2 py-1 rounded-full", role.color)}>
-            {role.name}
+          <span className={cn("text-[10px] font-medium px-2 py-1 rounded-full", ROLE_BADGE_COLORS[role])}>
+            {TEAM_ROLE_LABELS[role]}
           </span>
         )
       },
@@ -66,7 +93,7 @@ export function buildColumns(handlers: ActionHandlers): ColumnDef<TeamMember>[] 
       cell: ({ row }) => (
         <span className="text-xs text-muted-foreground">
           {new Date(row.original.joinedAt).toLocaleDateString("fr-FR", {
-            day: "numeric", month: "short", year: "numeric"
+            day: "numeric", month: "short", year: "numeric",
           })}
         </span>
       ),

@@ -3,8 +3,10 @@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Search, Upload, Globe, X } from "lucide-react"
+import type { DataType } from "@/types/datasets"
 
-export type DatasetTypeFilter = "all" | "image" | "audio" | "text" | "csv" | "json"
+// "all" + les types de données canoniques — reste synchro si DataType évolue.
+export type DatasetTypeFilter = "all" | DataType
 
 interface DatasetToolbarProps {
   tab: "workspace" | "library"

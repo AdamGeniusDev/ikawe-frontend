@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
 import { Button } from "@/components/ui/button"
-import { buildColumns } from "./columns"
+import { buildColumns, TeamMemberRow } from "./columns"
 import {
   DialogGererRoles,
   DialogChoisirRole,
@@ -24,8 +24,10 @@ import {
 } from "./dialogs"
 import {
   Team, TeamMember, PendingInvite,
-  MOCK_TEAMS, MOCK_PENDING, MOCK_DATASETS,
 } from "@/types/team"
+import {
+  MOCK_TEAMS, MOCK_PENDING_INVITES, MOCK_DATASET_REFS,
+} from "@/constants/mock-data"
 import {
   User, TeamRole,
   TEAM_ROLE_LABELS,
@@ -399,7 +401,11 @@ function TeamDetailView({ team, disponibles, onBack, onDialog, columns }: {
   columns:     ReturnType<typeof buildColumns>
 }) {
   const totalAnnotations = useMemo(() => team.members.reduce((a, m) => a + m.annotations, 0), [team.members])
-  const datasetsEquipe   = useMemo(() => MOCK_DATASETS.filter(d => team.datasetIds.includes(d.id)), [team.datasetIds])
+  const datasetsEquipe   = useMemo(() => MOCK_DATASET_REFS.filter(d => team.datasetIds.includes(d.id)), [team.datasetIds])
+  const rows: TeamMemberRow[] = team.members.map(m => ({
+  ...m,
+  user: getUserById(m.userId)!,
+}))
 
   return (
     <div className="flex flex-col w-full min-h-screen">
@@ -468,7 +474,7 @@ function TeamDetailView({ team, disponibles, onBack, onDialog, columns }: {
             <span className="text-sm font-semibold">Membres de l'équipe</span>
             <span className="text-[11px] text-muted-foreground">{team.members.length} membre{team.members.length > 1 ? "s" : ""}</span>
           </div>
-          <DataTable columns={columns} data={team.members} pageSize={8} />
+          <DataTable columns={columns} data={rows} pageSize={8} />
         </div>
 
         {/* Collaborateurs disponibles à ajouter */}
@@ -519,7 +525,7 @@ function TeamDetailView({ team, disponibles, onBack, onDialog, columns }: {
 
 export default function TeamPage() {
   const [teams,        setTeams]        = useState<Team[]>(MOCK_TEAMS)
-  const [pending,      setPending]      = useState<PendingInvite[]>(MOCK_PENDING)
+  const [pending,      setPending]      = useState<PendingInvite[]>(MOCK_PENDING_INVITES)
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [dialog,       setDialog]       = useState<DialogState>({ type: null, member: null, user: null })
 
@@ -635,30 +641,55 @@ export default function TeamPage() {
         />
       )}
 
-      <DialogGererRoles     open={dialog.type === "roles"}           onOpenChange={v => !v && close()} />
-      <DialogCreerEquipe    open={dialog.type === "creer_equipe"}    onOpenChange={v => !v && close()}
-        onCreate={(n, d) => { handleCreerEquipe(n, d); close() }} />
-      <DialogInviter        open={dialog.type === "inviter"}         onOpenChange={v => !v && close()}
-        onInvite={email => { setPending(prev => [...prev, { id: crypto.randomUUID(), email, sentAt: "À l'instant" }]); close() }} />
+      <DialogGererRoles     
+      open={dialog.type === "roles"}           
+      onOpenChange={v => !v && close()} 
+      />
+      <DialogCreerEquipe    
+      open={dialog.type === "creer_equipe"}    
+      onOpenChange={v => !v && close()}
+      onCreate={(n, d) => { handleCreerEquipe(n, d); close() }} 
+      />
+
+      <DialogInviter        
+      open={dialog.type === "inviter"}         
+      onOpenChange={v => !v && close()}
+      onInvite={email => { setPending(prev => [...prev, { id: crypto.randomUUID(), email, sentAt: "À l'instant" }]); close() }} 
+      />
 
       {/* Ajouter à l'équipe active (depuis vue détail) */}
-      <DialogChoisirRole    open={dialog.type === "choisir_role"}    onOpenChange={v => !v && close()}
-        user={dialog.user}
-        onAdd={(user, role) => { handleAjouterMembre(user, role); close() }} />
+      <DialogChoisirRole    
+      open={dialog.type === "choisir_role"}    
+      onOpenChange={v => !v && close()}
+      user={dialog.user}
+      onAdd={(user, role) => { handleAjouterMembre(user, role); close() }} 
+      />
 
       {/* Ajouter à une équipe choisie (depuis vue liste collaborateurs) */}
-      <DialogAjouterAEquipe open={dialog.type === "ajouter_a_equipe"} onOpenChange={v => !v && close()}
-        user={dialog.user}
-        teams={teams}
-        onAdd={(user, teamId, role) => { handleAjouterAEquipe(user, teamId, role); close() }} />
+      <DialogAjouterAEquipe 
+      open={dialog.type === "ajouter_a_equipe"} 
+      onOpenChange={v => !v && close()}
+      user={dialog.user}
+      teams={teams}
+      onAdd={(user, teamId, role) => { handleAjouterAEquipe(user, teamId, role); close() }} 
+      />
 
-      <DialogChangerRole    open={dialog.type === "role"}            onOpenChange={v => !v && close()}
-        member={dialog.member}
-        onRoleChange={(uid, role) => { handleRoleChange(uid, role); close() }} />
-      <DialogDetails        open={dialog.type === "details"}         onOpenChange={v => !v && close()} member={dialog.member} />
-      <DialogRetirer        open={dialog.type === "remove"}          onOpenChange={v => !v && close()}
-        member={dialog.member}
-        onConfirm={uid => { handleRemove(uid); close() }} />
+      <DialogChangerRole    
+      open={dialog.type === "role"}            
+      onOpenChange={v => !v && close()}
+      member={dialog.member}
+      onRoleChange={(uid, role) => { handleRoleChange(uid, role); close() }} 
+      />
+
+      <DialogDetails        
+      open={dialog.type === "details"}         
+      onOpenChange={v => !v && close()} member={dialog.member} 
+      />
+      <DialogRetirer        
+      open={dialog.type === "remove"}          
+      onOpenChange={v => !v && close()}
+      member={dialog.member}
+      onConfirm={uid => { handleRemove(uid); close() }} />
     </>
   )
 }

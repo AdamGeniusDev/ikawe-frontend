@@ -8,7 +8,8 @@ import {
   LucideIcon
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { MOCK_TASKS, STATUS_META} from "@/types/tasks"
+import { STATUS_META } from "@/types/tasks"
+import { MOCK_TASKS } from "@/constants/mock-data"
 import { useRouter } from "next/navigation"
 
 

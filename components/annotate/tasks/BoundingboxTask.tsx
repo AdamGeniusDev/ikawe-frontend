@@ -3,18 +3,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { SkipForward, ArrowRight, Trash2, MousePointer, Square } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SessionLabel } from '@/types/annotation'
+import type { SessionLabel, BoundingBox } from '@/types/annotation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface BoundingBox {
-  id: string
-  x: number
-  y: number
-  w: number
-  h: number
-  labelId: string
-}
+// BoundingBox vit dans types/annotation.ts (source de vérité). Ré-export pour
+// les imports historiques `from '.../BoundingboxTask'`.
+export type { BoundingBox }
 
 export type BBoxTool = 'draw' | 'select' | 'zoom'
 

@@ -9,9 +9,12 @@ import {
   AlertCircle, Clock, ChevronRight, ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { MOCK_TASKS, Task, STATUS_META, RevisionEvent } from '@/types/tasks'
+import { Task, STATUS_META, RevisionEvent } from '@/types/tasks'
+import { MOCK_TASKS } from '@/constants/mock-data'
 import { DATA_TYPE_LABELS } from '@/types/datasets'
+import { getAvatarProps } from '@/types/user'
 import type { DataType } from '@/types/tasks'
+import Image from 'next/image'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +69,11 @@ function RevisionRow({ event, onCorrect }: {
   event:     RevisionEvent
   onCorrect: (ids: string[]) => void
 }) {
+  const avatar      = getAvatarProps({
+    id:        event.actorId,
+    name:      event.actorName,
+    avatarUrl: event.actorAvatarUrl,
+  })
   const isRejection = event.action === 'rejected'
   const isValidated = event.action === 'validated'
   const isStarted   = event.action === 'started'
@@ -75,10 +83,13 @@ function RevisionRow({ event, onCorrect }: {
 
       {/* Avatar */}
       <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white mt-0.5"
-        style={{ backgroundColor: event.actorColor }}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white mt-0.5 overflow-hidden"
+        style={{ backgroundColor: avatar.avatarUrl ? 'transparent' : avatar.color }}
       >
-        {event.actorInitials}
+        {avatar.avatarUrl
+          ? <Image src={avatar.avatarUrl} alt={event.actorName} className="h-8 w-8 rounded-full object-cover" />
+          : avatar.initials
+        }
       </div>
 
       {/* Contenu */}
@@ -154,14 +165,15 @@ export default function TaskDetailPage() {
     .filter(l => l.trim())
     ?? []
 
-  // Trie les révisions du plus récent au plus ancien
   const revisions = [...(task.revisionHistory ?? [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
 
+  const taskID = task.id
+
   function handleCorrect(elementIds: string[]) {
     // En production : router.push(`/annotate/${task.id}?rejected=${elementIds.join(',')}`)
-    router.push(`/annotate/${task.id}`)
+    router.push(`/annotate/${taskID}`)
   }
 
   return (
@@ -223,8 +235,8 @@ export default function TaskDetailPage() {
               onClick={() => router.push(`/annotate/${task.id}`)}
               className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
             >
-              {task.status === 'pending'     && <><Play      className="h-4 w-4" /> Commencer l'annotation</>}
-              {task.status === 'paused'      && <><Play      className="h-4 w-4" /> Reprendre</>}
+              {task.status === 'pending'     && <><Play       className="h-4 w-4" /> Commencer l'annotation</>}
+              {task.status === 'paused'      && <><Play       className="h-4 w-4" /> Reprendre</>}
               {task.status === 'in_progress' && <><ArrowRight className="h-4 w-4" /> Continuer l'annotation</>}
             </button>
           ) : (
@@ -251,26 +263,32 @@ export default function TaskDetailPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatBox label="Avancement"
-            sub={`${task.completedElements.toLocaleString('fr-FR')} / ${task.totalElements.toLocaleString('fr-FR')} éléments`}>
+          <StatBox
+            label="Avancement"
+            sub={`${task.completedElements.toLocaleString('fr-FR')} / ${task.totalElements.toLocaleString('fr-FR')} éléments`}
+          >
             {progress}%
           </StatBox>
 
-          <StatBox label="Échéance"
+          <StatBox
+            label="Échéance"
             sub={
-              isDone ? 'Terminée'
-              : days > 0 ? `Dans ${days} jour${days > 1 ? 's' : ''}`
-              : days === 0 ? "Aujourd'hui"
+              isDone        ? 'Terminée'
+              : days > 0    ? `Dans ${days} jour${days > 1 ? 's' : ''}`
+              : days === 0  ? "Aujourd'hui"
               : `En retard de ${Math.abs(days)} j`
-            }>
+            }
+          >
             <span className="flex items-center gap-1.5 text-xl">
               <Clock className={cn('h-4 w-4 shrink-0', isUrgent ? 'text-red-500' : 'text-muted-foreground')} />
               <span className={cn(isUrgent && 'text-red-500')}>{task.deadline}</span>
             </span>
           </StatBox>
 
-          <StatBox label="Taux d'acceptation"
-            sub={task.reviewedCount ? `Sur ${task.reviewedCount.toLocaleString('fr-FR')} soumises` : 'Aucune révision encore'}>
+          <StatBox
+            label="Taux d'acceptation"
+            sub={task.reviewedCount ? `Sur ${task.reviewedCount.toLocaleString('fr-FR')} soumises` : 'Aucune révision encore'}
+          >
             {task.acceptanceRate !== undefined ? (
               <span className={cn(
                 task.acceptanceRate >= 90 ? 'text-emerald-600 dark:text-emerald-400'
@@ -284,8 +302,10 @@ export default function TaskDetailPage() {
             )}
           </StatBox>
 
-          <StatBox label="Statut"
-            sub={task.assignedByName ? `Assignée par ${task.assignedByName}` : undefined}>
+          <StatBox
+            label="Statut"
+            sub={task.assignedByName ? `Assignée par ${task.assignedByName}` : undefined}
+          >
             <span className={cn(
               'text-base',
               task.status === 'in_progress' ? 'text-blue-600 dark:text-blue-400'
@@ -313,7 +333,6 @@ export default function TaskDetailPage() {
         {(instructionLines.length > 0 || task.labels.length > 0) && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
-            {/* Instructions */}
             {instructionLines.length > 0 && (
               <div className="rounded-2xl border bg-background overflow-hidden">
                 <div className="px-5 py-3 border-b bg-muted/30">
@@ -337,7 +356,6 @@ export default function TaskDetailPage() {
               </div>
             )}
 
-            {/* Labels */}
             {task.labels.length > 0 && (
               <div className="rounded-2xl border bg-background overflow-hidden">
                 <div className="px-5 py-3 border-b bg-muted/30">
@@ -356,7 +374,6 @@ export default function TaskDetailPage() {
                 </div>
               </div>
             )}
-
           </div>
         )}
 

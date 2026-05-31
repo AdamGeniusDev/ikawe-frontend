@@ -13,8 +13,9 @@ export interface TextViewerProps {
   filename: string
   index: number
   total: number
-  onPrev: () => void
-  onNext: () => void
+  readonly?: boolean
+  onPrev?: () => void
+  onNext?: () => void
   onTextSelect?: (selection: { text: string; start: number; end: number }) => void
   highlights?: Array<{
     start: number
@@ -98,6 +99,7 @@ export default function TextViewer({
   filename,
   index,
   total,
+  readonly=false,
   onPrev,
   onNext,
   onTextSelect,
@@ -177,8 +179,8 @@ export default function TextViewer({
       {/* ── Zone de texte ── */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto px-5 py-4 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 select-text"
-        onMouseUp={handleMouseUp}
+        className={cn("flex-1 overflow-y-auto px-5 py-4 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200", !readonly && "select-text")}
+        onMouseUp={readonly ? undefined : handleMouseUp}
       >
         {highlights.length > 0 ? (
           <HighlightedText
@@ -210,7 +212,7 @@ export default function TextViewer({
         <div className="flex items-center gap-1">
           <NavBtn
             onClick={() => {
-              onPrev()
+              onPrev?.()
             }}
             disabled={index <= 1}
             label="Précédent"
@@ -222,7 +224,7 @@ export default function TextViewer({
 
           <NavBtn
             onClick={() => {
-              if (currentAnnotation?.status === 'pending') {
+              if (!readonly && currentAnnotation?.status === 'pending') {
                 toast.warning('Élément non annoté', {
                   description: `Annotez cet élément ou passez-le`,
                   duration: 1500,
@@ -230,7 +232,7 @@ export default function TextViewer({
                 })
                 return
               }
-              onNext()
+              onNext?.()
             }}
             disabled={index >= total}
             label="Suivant"

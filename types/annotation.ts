@@ -1,28 +1,64 @@
 // types/annotation.ts
+
+import { AlertCircle, CheckCircle2, Circle, Clock, XCircle } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { DataType, TaskType } from './datasets'
 
-// Labels définis PAR JOB — chaque job a ses propres labels
+// ─── Labels & éléments ───────────────────────────────────────────────────────
 
-export interface SessionLabel {
-  id:           string
-  name:         string
-  color:        string
+// Label de base — SOURCE DE VÉRITÉ pour { id, name, color }.
+export interface Label {
+  id:    string
+  name:  string
+  color: string
+}
+
+// Label enrichi pour une session d'annotation (raccourci clavier + description).
+export interface SessionLabel extends Label {
   shortcut?:    string
   description?: string
 }
 
 export interface DatasetElement {
   id:       string
-  src:      string        // URL du fichier (image, audio, texte...)
+  src:      string
   filename: string
   meta?:    Record<string, string>
 }
 
+// ─── Primitives géométriques — SOURCE DE VÉRITÉ ──────────────────────────────
+
+export interface BBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface TextSpan {
+  start: number
+  end:   number
+  text:  string
+}
+
 export interface AppliedLabel {
   labelId:        string
-  bbox?:          { x: number; y: number; w: number; h: number }
-  span?:          { start: number; end: number; text: string }
+  bbox?:          BBox
+  span?:          TextSpan
   transcription?: string
+}
+
+// ─── Représentations d'édition (état UI d'annotation) ────────────────────────
+
+
+export interface BoundingBox extends BBox {
+  id:      string
+  labelId: string
+}
+
+export interface SpanAnnotation extends TextSpan {
+  id:      string
+  labelId: string
 }
 
 export type AnnotationStatus = 'pending' | 'annotated' | 'skipped' | 'uncertain'
@@ -42,154 +78,265 @@ export interface SessionProgress {
   remaining: number
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUTS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Statuts job ─────────────────────────────────────────────────────────────
 
-export type JobStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
+export type JobStatus = 'draft' | 'pending' | 'in_progress' | 'completed' | 'cancelled'
 
 export const JOB_STATUS_META: Record<JobStatus, { label: string; className: string }> = {
+  draft:       { label: 'Brouillon',  className: 'bg-muted text-muted-foreground' },
   pending:     { label: 'En attente', className: 'bg-muted text-muted-foreground' },
   in_progress: { label: 'En cours',   className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
   completed:   { label: 'Terminé',    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
   cancelled:   { label: 'Annulé',     className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 }
+
+// ─── ReviewMode ───────────────────────────────────────────────────────────────
+
+export type ReviewMode = 'all' | 'none'
+
+// ─── AssignmentMode — le choix central ───────────────────────────────────────
+//
+//  INDIVIDUS :
+//    - Pool = liste d'individus annotateurs
+//    - Un réviseur global optionnel (différent des annotateurs)
+//    - Chaque batch → 1 annotateur + réviseur global (ou aucun)
+//    - Le owner contrôle tout
+//
+//  EQUIPES :
+//    - Pool = liste d'équipes
+//    - Chaque batch → 1 équipe (boîte noire, gère son workflow interne)
+//    - Pas de réviseur global : l'équipe s'en charge
+//    - Le owner ne choisit PAS de réviseur
+
+export type AssignmentMode = 'individuals' | 'teams'
+
+// ─── JobPool ─────────────────────────────────────────────────────────────────
+//
+//  Selon le mode :
+//    MODE individus → annotatorIds rempli, teamIds vide
+//    MODE équipes   → teamIds rempli, annotatorIds vide
+//
+//  reviewerId n'est pertinent qu'en mode individus.
+
+export interface JobPool {
+  mode:         AssignmentMode
+  annotatorIds: string[]   // mode individus uniquement
+  teamIds:      string[]   // mode équipes uniquement
+  reviewerId?:  string     // mode individus uniquement, optionnel
+  reviewMode:   ReviewMode
+}
+
+export function poolIsValid(pool: JobPool): boolean {
+  if (pool.mode === 'individuals') return pool.annotatorIds.length > 0
+  return pool.teamIds.length > 0
+}
+
+// ─── ResolvedBatchAssignment ─────────────────────────────────────────────────
+//
+//  Résultat de distributePool() pour un batch.
+//  Soit annotatorId (mode individus), soit teamId (mode équipes).
+
+export interface ResolvedBatchAssignment {
+  batchIndex:  number
+  annotatorId?: string
+  teamId?:      string
+  reviewerId?:  string
+  reviewMode:   ReviewMode
+  isOverride:   boolean
+}
+
+// ─── BatchAssignmentOverride ─────────────────────────────────────────────────
+
+export interface BatchAssignmentOverride {
+  batchIndex:   number
+  annotatorId?: string
+  teamId?:      string
+  reviewerId?:  string
+  reviewMode:   ReviewMode
+}
+
+// ─── distributePool ──────────────────────────────────────────────────────────
+//
+//  Répartit le pool en round-robin sur batchCount batches.
+//  Les overrides remplacent l'assignation calculée pour un batch donné.
+
+export function distributePool(
+  pool:       JobPool,
+  batchCount: number,
+  overrides:  BatchAssignmentOverride[],
+): ResolvedBatchAssignment[] {
+  const slots: Omit<ResolvedBatchAssignment, 'batchIndex' | 'isOverride'>[] =
+    pool.mode === 'individuals'
+      ? pool.annotatorIds.map(id => ({
+          annotatorId: id,
+          reviewerId:  pool.reviewerId,
+          reviewMode:  pool.reviewMode,
+        }))
+      : pool.teamIds.map(teamId => ({
+          teamId,
+          reviewMode: 'none' as ReviewMode, // les équipes gèrent leur révision
+        }))
+
+  if (slots.length === 0) return []
+
+  return Array.from({ length: batchCount }, (_, i) => {
+    const batchIndex = i + 1
+    const override   = overrides.find(o => o.batchIndex === batchIndex)
+
+    if (override) {
+      return {
+        batchIndex,
+        annotatorId: override.annotatorId,
+        teamId:      override.teamId,
+        reviewerId:  override.reviewerId,
+        reviewMode:  override.reviewMode,
+        isOverride:  true,
+      }
+    }
+
+    return {
+      batchIndex,
+      ...slots[i % slots.length],
+      isOverride: false,
+    }
+  })
+}
+
+// ─── Statuts batch ────────────────────────────────────────────────────────────
 
 export type BatchStatus =
   | 'pending'
   | 'in_progress'
   | 'paused'
+  | 'submitted'
+  | 'in_review'
+  | 'partially_rejected'
+  | 'rejected'
   | 'completed'
+  | 'blocked'
   | 'cancelled'
 
-export const BATCH_STATUS_META: Record<BatchStatus, { label: string; className: string }> = {
-  pending:     { label: 'En attente', className: 'bg-muted text-muted-foreground' },
-  in_progress: { label: 'En cours',   className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  paused:      { label: 'En pause',   className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  completed:   { label: 'Terminé',    className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  cancelled:   { label: 'Annulé',     className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+export const BATCH_STATUS_META: Record<
+  BatchStatus,
+  { label: string; className: string; barColor: string; icon: LucideIcon }
+> = {
+  pending:            { label: 'En attente',           className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',            barColor: 'bg-zinc-300 dark:bg-zinc-600', icon: Circle        },
+  in_progress:        { label: 'En cours',             className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',         barColor: 'bg-primary',                   icon: Clock         },
+  paused:             { label: 'En pause',             className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',     barColor: 'bg-amber-500',                 icon: Clock         },
+  submitted:          { label: 'Soumis',               className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', barColor: 'bg-violet-500',                icon: CheckCircle2  },
+  in_review:          { label: 'En révision',          className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',         barColor: 'bg-blue-500',                  icon: Clock         },
+  partially_rejected: { label: 'Corrections requises', className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400', barColor: 'bg-orange-500',                icon: AlertCircle   },
+  rejected:           { label: 'Rejeté',               className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',             barColor: 'bg-red-500',                   icon: XCircle       },
+  completed:          { label: 'Terminé',              className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', barColor: 'bg-emerald-500',            icon: CheckCircle2  },
+  blocked:            { label: 'Bloqué',               className: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',         barColor: 'bg-rose-500',                  icon: AlertCircle   },
+  cancelled:          { label: 'Annulé',               className: 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400',            barColor: 'bg-zinc-500',                  icon: Circle        },
+}
+
+export function resolveBatchStatusAfterReview(
+  validatedCount: number,
+  rejectedCount:  number,
+): BatchStatus {
+  if (rejectedCount === 0)  return 'completed'
+  if (validatedCount === 0) return 'rejected'
+  return 'partially_rejected'
+}
+
+export type BatchUserRole = 'annotator' | 'reviewer' | 'owner' | 'none'
+
+export function resolveBatchUserRole(
+  batch:   AnnotationBatch,
+  userId:  string,
+  ownerId: string,
+): BatchUserRole {
+  if (userId === ownerId)          return 'owner'
+  if (batch.reviewerId === userId) return 'reviewer'
+  if (batch.assignedTo === userId) return 'annotator'
+  return 'none'
 }
 
 export type DistributionMode = 'sequential' | 'random'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BATCH ASSIGNMENT
-// ─────────────────────────────────────────────────────────────────────────────
-// Stocké sur le Job (pas sur chaque Batch) car c'est l'admin qui définit
-// les règles d'assignation une seule fois à la création du job.
-// Le système applique ensuite ces règles sur chaque batch via resolveAssignedUsers().
-//
-// scope: 'job'   → s'applique à TOUS les batches du job (batchIndex doit être 0)
-// scope: 'batch' → s'applique uniquement au batch N (batchIndex = N)
-//
-
-
-export type AssignmentScope = 'job' | 'batch'
-
-export interface BatchAssignment {
-  batchIndex:     number                   // 0 = tout le job, 1..N = batch spécifique
-  scope:          AssignmentScope
-  teamId?:        string                   // assigner une équipe entière
-  userIds:        string[]                 // assigner des individus
-  roleOverrides?: Record<string, 'annotator' | 'reviewer'>  // userId → rôle sur ce batch
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// JOB D'ANNOTATION
-// ─────────────────────────────────────────────────────────────────────────────
-// Le Job est créé par un admin sur un Dataset existant.
-// Un même Dataset peut avoir plusieurs Jobs avec des taskTypes et labels différents.
+// ─── AnnotationJob ────────────────────────────────────────────────────────────
 
 export interface AnnotationJob {
   id:          string
-  datasetId:   string      // référence au Dataset
-  datasetName: string      // copié pour affichage sans re-fetch
-
-  // Hérité du Dataset à la création du Job (lecture seule ensuite)
-  dataType: DataType
-
-  // Définis par l'admin au moment de créer le Job (pas sur le Dataset)
-  taskType: TaskType
-  labels:   SessionLabel[]
-
-  // Options de la tâche (dépendent du taskType choisi)
-  allowSkip:               boolean
-  allowMultiple?:          boolean          // utile pour classification multi-labels
-  transcriptionLanguage?:  string           // si taskType === 'transcription'
-  transcriptionMinLength?: number           // si taskType === 'transcription'
-  targetField?:            string           // si taskType === 'sequence'
-
-  // Découpage en batches
-  totalElements:    number
-  batchSize:        number
-  batchCount:       number                  // calculé : Math.ceil(totalElements / batchSize)
-  distributionMode: DistributionMode
-
-  // Règles d'assignation (définies une fois, appliquées à tous les batches)
-  // Le résultat par batch est dans AnnotationBatch.assignedTo[]
-  batchAssignments: BatchAssignment[]
-
-  // Suivi de progression (mis à jour quand les batches passent en 'completed')
-  annotatedCount: number
-  skippedCount:   number
-  status:         JobStatus
-
-  createdBy: string
-  createdAt: string
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BATCH D'ANNOTATION
-// ─────────────────────────────────────────────────────────────────────────────
-// Un batch = un paquet de N éléments à annoter, extrait du dataset.
-// Créé automatiquement par le système quand un Job est validé.
-//
-// Il hérite des paramètres du Job (labels, taskType, options)
-// et porte le résultat de la résolution des assignations (assignedTo[]).
-
-export interface AnnotationBatch {
-  id:          string
-  jobId:       string      // référence au Job parent
   datasetId:   string
   datasetName: string
+  dataType:    DataType
+  taskType:    TaskType
+  labels:      SessionLabel[]
+  instructions?: string
 
-  // Hérités du Job
-  dataType: DataType
-  taskType: TaskType
-  labels:   SessionLabel[]
   allowSkip:               boolean
   allowMultiple?:          boolean
   transcriptionLanguage?:  string
   transcriptionMinLength?: number
   targetField?:            string
 
-  // Position dans le job
-  batchIndex: number       // ex: 2 (ce batch est le 2ème)
-  batchTotal: number       // ex: 3 (il y a 3 batches au total dans ce job)
+  totalElements:    number
+  batchSize:        number
+  batchCount:       number
+  distributionMode: DistributionMode
 
-  // Les fichiers à annoter dans CE batch
-  elements: DatasetElement[]
+  pool:           JobPool
+  batchOverrides: BatchAssignmentOverride[]
 
-  // Résultat de resolveAssignedUsers() — qui travaille sur ce batch
-  assignedTo: string[]     // userIds effectifs (job-level + batch-level fusionnés)
-  teamId?:    string       // si assigné via une équipe
-
-  // État
-  status:    BatchStatus
-  pausedAt?: string
-  progress?: SessionProgress
+  annotatedCount: number
+  skippedCount:   number
+  status:         JobStatus
+  createdBy:      string
+  createdAt:      string
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ANNOTATION SESSION — état actif dans le store Zustand pendant le travail
-// ─────────────────────────────────────────────────────────────────────────────
-// Produite par batchToSession() à partir d'un AnnotationBatch.
-// C'est ce que l'annotateur voit : ses éléments, ses labels, sa progression.
-// Il ne voit pas le Job, les assignations, les autres batches — juste son travail.
+// ─── AnnotationBatch ──────────────────────────────────────────────────────────
+//
+//  Dénormalisation intentionnelle :
+//  Les champs datasetId, datasetName, dataType, taskType, labels, instructions
+//  sont copiés depuis AnnotationJob à la création du batch.
+//  Raison : le batch doit être autonome — un annotateur peut travailler sur son
+//  batch même si le job parent est modifié ou archivé entre-temps.
+//  Le batch est la source de vérité pour sa propre session d'annotation.
+
+export interface AnnotationBatch {
+  id:          string
+  jobId:       string
+  datasetId:   string
+  datasetName: string
+  dataType:    DataType
+  taskType:    TaskType
+  labels:      SessionLabel[]
+
+  instructions?:           string
+  allowSkip:               boolean
+  allowMultiple?:          boolean
+  transcriptionLanguage?:  string
+  transcriptionMinLength?: number
+  targetField?:            string
+
+  batchIndex: number
+  batchTotal: number
+  elements:   DatasetElement[]
+
+  assignedTo:  string   // userId ou "team:<teamId>"
+  reviewerId?: string
+  reviewMode:  ReviewMode
+  teamId?:     string
+  isOverride:  boolean
+
+  status:       BatchStatus
+  pausedAt?:    string
+  submittedAt?: string
+  progress?:    SessionProgress
+
+  acceptedCount?: number
+  rejectedCount?: number
+}
+
+// ─── AnnotationSession ────────────────────────────────────────────────────────
+//
+//  Dénormalisation intentionnelle (suite de AnnotationBatch) :
+//  batchToSession() copie tous les champs de configuration pour que la session
+//  soit complètement autonome pendant l'annotation, sans re-fetch.
 
 export interface AnnotationSession {
   id:          string
@@ -197,36 +344,29 @@ export interface AnnotationSession {
   datasetName: string
   dataType:    DataType
   taskType:    TaskType
-
-  // Contexte dans le job
   jobId?:      string
   batchIndex?: number
   batchTotal?: number
   status?:     BatchStatus
 
-  // Contenu du travail
   labels:   SessionLabel[]
   elements: DatasetElement[]
 
-  // Options
+  instructions?:           string
   allowSkip:               boolean
   allowMultiple?:          boolean
   transcriptionLanguage?:  string
   transcriptionMinLength?: number
   targetField?:            string
 
-  // Qui est assigné
-  assignedTo: string[]
-  teamId?:    string
-
-  // Méta
-  createdAt: string
-  pausedAt?: string
-  progress?: SessionProgress
+  assignedTo:  string
+  reviewerId?: string
+  reviewMode:  ReviewMode
+  teamId?:     string
+  createdAt:   string
+  pausedAt?:   string
+  progress?:   SessionProgress
 }
-
-
-// Utilisé pour afficher la liste des tâches d'un annotateur groupées par Job.
 
 export interface JobGroup {
   job:         AnnotationJob
@@ -234,14 +374,8 @@ export interface JobGroup {
   activeBatch: AnnotationBatch | null
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Convertit un AnnotationBatch en AnnotationSession pour le store Zustand.
- * C'est la porte d'entrée : l'annotateur clique sur "Commencer" → batchToSession().
- */
 export function batchToSession(batch: AnnotationBatch): AnnotationSession {
   return {
     id:          batch.id,
@@ -255,12 +389,15 @@ export function batchToSession(batch: AnnotationBatch): AnnotationSession {
     status:      batch.status,
     labels:      batch.labels,
     elements:    batch.elements,
+    instructions:           batch.instructions,
     allowSkip:              batch.allowSkip,
     allowMultiple:          batch.allowMultiple,
     transcriptionLanguage:  batch.transcriptionLanguage,
     transcriptionMinLength: batch.transcriptionMinLength,
     targetField:            batch.targetField,
     assignedTo:  batch.assignedTo,
+    reviewerId:  batch.reviewerId,
+    reviewMode:  batch.reviewMode,
     teamId:      batch.teamId,
     createdAt:   new Date().toISOString(),
     pausedAt:    batch.pausedAt,
@@ -268,12 +405,8 @@ export function batchToSession(batch: AnnotationBatch): AnnotationSession {
   }
 }
 
-/**
- Initialise toutes les annotations (elements a annote) d'un batch à 'pending'.
- Appelé quand l'annotateur ouvre un batch pour la première fois.
- */
 export function generateInitialAnnotations(
-  elements: DatasetElement[]
+  elements: DatasetElement[],
 ): Record<string, ElementAnnotation> {
   return Object.fromEntries(
     elements.map(el => [
@@ -283,11 +416,6 @@ export function generateInitialAnnotations(
   )
 }
 
-/**
-  Trouve le batch le plus prioritaire à ouvrir pour un annotateur.
-  Priorité : in_progress > paused > pending
-  (On reprend d'abord ce qui est en cours, puis ce qui est en pause, puis le nouveau)
- */
 export function findActiveBatch(batches: AnnotationBatch[]): AnnotationBatch | null {
   return (
     batches.find(b => b.status === 'in_progress') ??
@@ -297,57 +425,35 @@ export function findActiveBatch(batches: AnnotationBatch[]): AnnotationBatch | n
   )
 }
 
-/**
-  Groupe les batches par job pour la vue /annotate.
-  Filtre uniquement les batches assignés à l'utilisateur courant.
- */
 export function groupBatchesByJob(
   jobs:    AnnotationJob[],
   batches: AnnotationBatch[],
   userId:  string,
+  // Prédicat d'accès injectable : par défaut assignation individuelle directe.
+  // mock-data y injecte une version qui gère aussi les batches d'équipe.
+  canAccess: (batch: AnnotationBatch, userId: string) => boolean =
+    (b, u) => b.assignedTo === u,
 ): JobGroup[] {
   return jobs
     .map(job => {
-      const myBatches = batches.filter(
-        b => b.jobId === job.id && b.assignedTo.includes(userId)
-      )
+      const myBatches = batches.filter(b => b.jobId === job.id && canAccess(b, userId))
       if (myBatches.length === 0) return null
       return { job, myBatches, activeBatch: findActiveBatch(myBatches) }
     })
     .filter(Boolean) as JobGroup[]
 }
 
-/**
-  Calcule la liste finale des userIds assignés à un batch donné.
- 
- Fusionne deux niveaux de règles depuis job.batchAssignments :
-   1. scope='job'   → s'applique à tous les batches (héritage global)
-   2. scope='batch' → s'applique uniquement au batchIndex ciblé
-
-  **/
-
-export function resolveAssignedUsers(
-  job:        AnnotationJob,
-  batchIndex: number,
-): string[] {
-  const jobLevel   = job.batchAssignments.filter(a => a.scope === 'job')
-  const batchLevel = job.batchAssignments.filter(
-    a => a.scope === 'batch' && a.batchIndex === batchIndex
-  )
-  const allUserIds = [
-    ...jobLevel.flatMap(a => a.userIds),
-    ...batchLevel.flatMap(a => a.userIds),
-  ]
-  return [...new Set(allUserIds)] 
+// Nombre d'assignés d'un job, calculé depuis le pool (source de vérité).
+// teamSize() permet de résoudre la taille réelle des équipes (optionnel).
+export function countJobAssignees(
+  job:      AnnotationJob,
+  teamSize: (teamId: string) => number = () => 0,
+): number {
+  const p = job.pool
+  if (p.mode === 'individuals') return p.annotatorIds.length
+  return p.teamIds.reduce((n, tid) => n + teamSize(tid), 0)
 }
 
-/**
-  Vérifie si un dataset est prêt à recevoir un job d'annotation.
-  À appeler avant d'afficher le formulaire de création de job.
- 
-  Un dataset 'draft' = uploadé mais pas encore configuré (titre, description manquants).
-  On ne peut pas créer un job dessus car ses métadonnées sont incomplètes.
- **/
 export function isDatasetReadyForJob(datasetStatus: string): boolean {
   return datasetStatus === 'active' || datasetStatus === 'in_review'
 }

@@ -3,17 +3,13 @@
 import { useState, useCallback, useEffect } from 'react'
 import { SkipForward, ArrowRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SessionLabel } from '@/types/annotation'
+import type { SessionLabel, SpanAnnotation } from '@/types/annotation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface SpanAnnotation {
-  id: string
-  start: number
-  end: number
-  text: string
-  labelId: string
-}
+// SpanAnnotation vit dans types/annotation.ts (source de vérité). Ré-export pour
+// les imports historiques `from '.../SequenceTask'`.
+export type { SpanAnnotation }
 
 export interface SequenceTaskProps {
   labels: SessionLabel[]

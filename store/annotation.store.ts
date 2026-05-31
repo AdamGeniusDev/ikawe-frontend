@@ -4,10 +4,10 @@ import type {
   ElementAnnotation,
   AppliedLabel,
   AnnotationStatus,
+  BoundingBox,
+  SpanAnnotation,
 } from '@/types/annotation'
-import type { BoundingBox } from '@/components/annotate/tasks/BoundingboxTask'
-import type { SpanAnnotation } from '@/components/annotate/tasks/SequenceTask'
-import { generateInitialAnnotations } from '@/constants/mock-data-annotate'
+import { generateInitialAnnotations } from '@/types/annotation'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ interface AnnotationState {
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 interface AnnotationActions {
-  loadSession:            (session: AnnotationSession) => void
+  loadSession: (session: AnnotationSession, existingAnnotations?: Record<string, ElementAnnotation>) => void
   clearSession:           () => void
   goTo:                   (idx: number) => void
   goNext:                 () => void

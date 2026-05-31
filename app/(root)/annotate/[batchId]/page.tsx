@@ -9,7 +9,7 @@ import {
   getSessionById,
   getBatchById,
   canAccessBatch,
-} from '@/constants/mock-data-annotate'
+} from '@/constants/mock-data'
 import { MOCK_USERS } from '@/types/user' 
 import AnnotationShell    from '@/components/annotate/AnnotationShell'
 import CompletionScreen   from '@/components/annotate/CompletionScreen'
@@ -34,7 +34,7 @@ export default function SessionPage() {
   const { batchId } = useParams<{ batchId: string }>()
 
   const batch = getBatchById(batchId)
-  if (batch && !canAccessBatch(batch, CURRENT_USER.userId)) notFound()
+  if (batch && !canAccessBatch(batch, CURRENT_USER.id)) notFound()
 
   const sessionData = getSessionById(batchId)
 

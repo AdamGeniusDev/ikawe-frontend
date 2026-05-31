@@ -5,14 +5,15 @@ import { useRouter } from 'next/navigation'
 import {
   Plus, ArrowRight, CheckCircle2, Layers,
   ImageIcon, Music, FileText, Table2, Braces,
-  Zap, PlayCircle, Circle, Clock, BarChart3,
+  Zap, PlayCircle, BarChart3,
   Users, Eye,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getJobGroupsForUser, MOCK_JOBS, MOCK_BATCHES } from '@/constants/mock-data-annotate'
+import { getJobGroupsForUser, MOCK_JOBS, MOCK_BATCHES, getTeamById } from '@/constants/mock-data'
 import { MOCK_USERS } from '@/types/user'
 import type { DataType, TaskType } from '@/types/datasets'
-import type { JobGroup, AnnotationBatch, BatchStatus, AnnotationJob } from '@/types/annotation'
+import { type JobGroup, type AnnotationBatch, type AnnotationJob, BATCH_STATUS_META, resolveBatchUserRole, countJobAssignees } from '@/types/annotation'
+import { resolveBatchCTA } from '@/lib/batch-cta'
 
 const CURRENT_USER = MOCK_USERS[0]  
 
@@ -52,13 +53,7 @@ const TASK_LABEL: Partial<Record<TaskType, string>> = {
   sequence:       'NER / Séquence',
 }
 
-const BATCH_STATUS_ICON: Record<BatchStatus, React.ReactNode> = {
-  pending:     <Circle       className="h-3 w-3 text-muted-foreground" />,
-  in_progress: <Clock        className="h-3 w-3 text-blue-500" />,
-  paused:      <Clock        className="h-3 w-3 text-amber-500" />,
-  completed:   <CheckCircle2 className="h-3 w-3 text-emerald-500" />,
-  cancelled:   <Circle       className="h-3 w-3 text-red-400" />,
-}
+
 
 // ─── BatchMiniRow ─────────────────────────────────────────────────────────────
 
@@ -67,9 +62,10 @@ function BatchMiniRow({ batch }: { batch: AnnotationBatch }) {
     ? Math.round(((batch.progress.annotated + batch.progress.skipped) / batch.progress.total) * 100)
     : 0
   const isDone = batch.status === 'completed'
+  const meta = BATCH_STATUS_META[batch.status]
   return (
     <div className="flex items-center gap-2 py-1">
-      {BATCH_STATUS_ICON[batch.status]}
+      {meta?.icon && <meta.icon className="h-3 w-3" />}
       <span className="text-[10px] text-muted-foreground shrink-0 w-16">
         Groupe {batch.batchIndex}/{batch.batchTotal}
       </span>
@@ -92,24 +88,32 @@ function JobCard({
   onViewJob:    (jobId:   string) => void
 }) {
   const { job, myBatches, activeBatch } = group
+  const activeCta = activeBatch
+    ? resolveBatchCTA(
+        activeBatch.id,
+        activeBatch.status,
+        resolveBatchUserRole(
+          activeBatch,
+          CURRENT_USER.id,
+          job.createdBy,
+        ),
+      )
+    : null
   const pct         = jobProgressPct(group)
   const isCompleted = jobIsCompleted(group)
   const isMulti     = myBatches.length > 1
   const totalEl     = myBatches.reduce((a, b) => a + (b.progress?.total     ?? 0), 0)
   const doneEl      = myBatches.reduce((a, b) => a + (b.progress?.annotated ?? 0) + (b.progress?.skipped ?? 0), 0)
-
-  function ctaLabel(batch: AnnotationBatch): string {
-    if (batch.status === 'paused')      return 'Reprendre'
-    if (batch.status === 'in_progress') return 'Continuer'
-    return 'Commencer'
-  }
+  const router = useRouter()
 
   function handleCta() {
-    if (!activeBatch) return
+
+    if (!activeBatch || !activeCta?.href) return
+
     if (isMulti) {
       onViewJob(job.id)
     } else {
-      onGoDirectly(activeBatch.id)
+      router.push(activeCta.href)
     }
   }
 
@@ -173,26 +177,42 @@ function JobCard({
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-1 border-t border-border/50">
-        {isMulti ? (
-          <button type="button" onClick={() => onViewJob(job.id)}
-            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-            Voir tous les groupes →
-          </button>
-        ) : <span />}
+       <div className="flex items-center justify-between pt-1 border-t border-border/50">
+          {isMulti ? (
+            <button type="button" onClick={() => onViewJob(job.id)}
+              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+              Voir tous les groupes →
+            </button>
+          ) : <span />}
 
-        {isCompleted ? (
-          <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
-            <CheckCircle2 className="h-3 w-3" />Terminé
-          </span>
-        ) : activeBatch ? (
-          <button type="button" onClick={handleCta}
-            className="flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20 transition-colors">
-            {ctaLabel(activeBatch)}
-            <ArrowRight className="h-3 w-3" />
-          </button>
-        ) : null}
-      </div>
+          {isCompleted ? (
+            <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-3 w-3" /> Terminé
+            </span>
+          ) : activeCta?.href ? (
+            <button
+              type="button"
+              onClick={handleCta}
+              title={activeCta.tooltip}
+              className={cn(
+                'flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                activeCta.variant === 'primary'   && 'bg-primary/10 text-primary hover:bg-primary/20',
+                activeCta.variant === 'warning'   && 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/20 dark:text-orange-400',
+                activeCta.variant === 'secondary' && 'border border-border hover:bg-muted text-foreground',
+              )}
+            >
+              {activeCta.label}
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          ) : activeCta ? (
+            <span
+              title={activeCta.tooltip}
+              className="text-[11px] text-muted-foreground cursor-default"
+            >
+              {activeCta.label}
+            </span>
+          ) : null}
+        </div>
     </div>
   )
 }
@@ -207,7 +227,7 @@ function ManagerJobCard({
 }) {
   const pct          = jobGlobalPct(job)
   const isCompleted  = job.status === 'completed'
-  const assigneeCount = [...new Set(job.batchAssignments.flatMap(a => a.userIds))].length
+  const assigneeCount = countJobAssignees(job, tid => getTeamById(tid)?.members.length ?? 0)
 
   const STATUS_COLOR: Record<string, string> = {
     pending:     'bg-muted text-muted-foreground',
@@ -319,7 +339,7 @@ export default function AnnotateHub() {
 
   // Batches assignés à moi (vue annotateur)
   const allGroups = useMemo(
-    () => getJobGroupsForUser(CURRENT_USER.userId),
+    () => getJobGroupsForUser(CURRENT_USER.id),
     []
   )
   const activeGroups    = allGroups.filter(g => !jobIsCompleted(g))
@@ -327,7 +347,7 @@ export default function AnnotateHub() {
 
   // Jobs créés par moi (vue manager/owner)
   const myCreatedJobs = useMemo(
-    () => MOCK_JOBS.filter(j => j.createdBy === CURRENT_USER.userId),
+    () => MOCK_JOBS.filter(j => j.createdBy === CURRENT_USER.id),
     []
   )
 

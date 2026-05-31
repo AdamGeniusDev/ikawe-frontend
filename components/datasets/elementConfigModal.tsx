@@ -10,18 +10,18 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
-import { DatasetElement, DatasetElementType } from "./elementConfigurator"
+import { DatasetElementUI, DataType } from "@/types/datasets"
 
 //icone du bouton sur la card
 
-export function PreviewTriggerIcon({ type }: { type: DatasetElementType }) {
+export function PreviewTriggerIcon({ type }: { type: DataType }) {
   if (type === "image") return <Maximize2 className="h-3 w-3" />
   if (type === "audio") return <Play      className="h-3 w-3" />
   return                       <Eye       className="h-3 w-3" />
 }
 
 // modal de l'image 
-function ImagePanel({ element }: { element: DatasetElement }) {
+function ImagePanel({ element }: { element: DatasetElementUI }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="w-full rounded-lg border bg-muted/40 overflow-hidden flex items-center justify-center">
@@ -51,7 +51,7 @@ function ImagePanel({ element }: { element: DatasetElement }) {
 
 //modal de l'audio
 
-function AudioPanel({ element }: { element: DatasetElement }) {
+function AudioPanel({ element }: { element: DatasetElementUI }) {
   const duration = element.durationSeconds
     ? `${Math.floor(element.durationSeconds / 60)}:${String(element.durationSeconds % 60).padStart(2, "0")}`
     : null
@@ -75,7 +75,7 @@ function AudioPanel({ element }: { element: DatasetElement }) {
 
 //modal du text/csv/json
 
-function TextPanel({ element }: { element: DatasetElement }) {
+function TextPanel({ element }: { element: DatasetElementUI }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="h-64 w-full rounded-lg border bg-muted/20 overflow-y-auto p-3 flex items-center justify-center">
@@ -93,7 +93,7 @@ function TextPanel({ element }: { element: DatasetElement }) {
 
 //configuration du type dans la modal
 
-const TYPE_CONFIG: Record<DatasetElementType, { title: string; icon: React.ReactNode }> = {
+const TYPE_CONFIG: Record<DataType, { title: string; icon: React.ReactNode }> = {
   image: { title: "Aperçu de l'image", icon: <ImageIcon className="h-4 w-4 text-blue-500"   /> },
   audio: { title: "Écouter l'audio",   icon: <Music     className="h-4 w-4 text-violet-500" /> },
   text:  { title: "Lire le texte",     icon: <FileText  className="h-4 w-4 text-amber-500"  /> },
@@ -104,7 +104,7 @@ const TYPE_CONFIG: Record<DatasetElementType, { title: string; icon: React.React
 // composant principal
 
 export function ElementPreviewModal({ element, open, onClose }: {
-  element: DatasetElement
+  element: DatasetElementUI
   open: boolean
   onClose: () => void
 }) {
@@ -120,7 +120,7 @@ export function ElementPreviewModal({ element, open, onClose }: {
           <DialogTitle className="flex items-center gap-2 py-4">
             {config.icon}
             <span>{config.title}</span>
-            <span className="ml-auto text-xs font-normal text-muted-foreground truncate max-w-[160px]">
+            <span className="ml-auto text-xs font-normal text-muted-foreground truncate max-w-40">
               {element.name}
             </span>
           </DialogTitle>
