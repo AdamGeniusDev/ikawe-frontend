@@ -127,7 +127,7 @@ export default function Navbar() {
 
                 {/* Underline animé sous le lien actif */}
                 <span
-                  className="absolute -bottom-1 left-0 h-[2px] rounded-full transition-all duration-300"
+                  className="absolute -bottom-1 left-0 h-0.5 rounded-full transition-all duration-300"
                   style={{
                     backgroundColor: "#C8963E",
                     width: isActive ? "100%" : "0%",
@@ -140,7 +140,7 @@ export default function Navbar() {
 
         {/* Desktop CTAs */}
         <div className="hidden md:flex items-center gap-3">
-          <Link href='/signIn'>
+          <Link href='/login'>
           <Button
             variant="outline"
             aria-label="Se connecter à son compte"
