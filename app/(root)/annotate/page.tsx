@@ -81,7 +81,7 @@ function BatchMiniRow({ batch }: { batch: AnnotationBatch }) {
 // ─── JobCard (vue annotateur) ──────────────────────────────────────────────────
 
 function JobCard({
-  group, onGoDirectly, onViewJob,
+  group , onViewJob,
 }: {
   group:        JobGroup
   onGoDirectly: (batchId: string) => void
@@ -90,12 +90,13 @@ function JobCard({
   const { job, myBatches, activeBatch } = group
   const activeCta = activeBatch
     ? resolveBatchCTA(
-        activeBatch.id,
-        activeBatch.status,
-        resolveBatchUserRole(
-          activeBatch,
-          CURRENT_USER.id,
-          job.createdBy,
+      job.id,
+      activeBatch.id,
+      activeBatch.status,
+      resolveBatchUserRole(
+        activeBatch,
+        CURRENT_USER.id,
+        job.createdBy,
         ),
       )
     : null

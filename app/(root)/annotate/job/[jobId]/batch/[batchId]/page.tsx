@@ -1,16 +1,18 @@
 'use client'
 
-// app/(root)/annotate/[sessionId]/page.tsx
+// app/(root)/annotate/job/[jobId]/batch/[batchId]/page.tsx
 
 import { useEffect, useCallback } from 'react'
 import { useParams, notFound } from 'next/navigation'
+import { Eye } from 'lucide-react'
 import { useAnnotationStore, selectCurrentElement } from '@/store/annotation.store'
 import {
+  MOCK_JOBS,
   getSessionById,
   getBatchById,
   canAccessBatch,
 } from '@/constants/mock-data'
-import { MOCK_USERS } from '@/types/user' 
+import { CURRENT_USER } from '@/constants/mock-data'
 import AnnotationShell    from '@/components/annotate/AnnotationShell'
 import CompletionScreen   from '@/components/annotate/CompletionScreen'
 import ImageViewer        from '@/components/annotate/viewers/ImageViewer'
@@ -22,19 +24,29 @@ import ClassificationTask from '@/components/annotate/tasks/ClassificationTask'
 import BoundingBoxTask    from '@/components/annotate/tasks/BoundingboxTask'
 import TranscriptionTask  from '@/components/annotate/tasks/TranscriptionTask'
 import SequenceTask       from '@/components/annotate/tasks/SequenceTask'
-import CaptioningTask     from '@/components/annotate/tasks/CaptioningTask'   // ← NOUVEAU
+import CaptioningTask     from '@/components/annotate/tasks/CaptioningTask'
 
 // ─── Utilisateur courant ──────────────────────────────────────────────────────
 
-const CURRENT_USER = MOCK_USERS[0]
+
+
+const noop = () => {}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SessionPage() {
-  const { batchId } = useParams<{ batchId: string }>()
+  const { jobId, batchId } = useParams<{ jobId: string; batchId: string }>()
 
+  // Accès : le batch doit exister et appartenir au job de l'URL
+  const job   = MOCK_JOBS.find(j => j.id === jobId)
   const batch = getBatchById(batchId)
-  if (batch && !canAccessBatch(batch, CURRENT_USER.id)) notFound()
+  if (!job || !batch || batch.jobId !== jobId) notFound()
+
+  // Annotateur assigné = édition. Owner du job = lecture seule. Sinon 404.
+  const canEdit = canAccessBatch(batch, CURRENT_USER.id)
+  const isOwner = job.createdBy === CURRENT_USER.id
+  if (!canEdit && !isOwner) notFound()
+  const readOnly = !canEdit
 
   const sessionData = getSessionById(batchId)
 
@@ -67,11 +79,12 @@ export default function SessionPage() {
   }, [sessionData, session?.id, loadSession])
 
   const handleToggleLabel = useCallback((labelId: string) => {
+    if (readOnly) return
     toggleLabel(labelId)
     if (!session?.allowMultiple) {
       setTimeout(() => validateCurrent(), 2500)
     }
-  }, [toggleLabel, session?.allowMultiple, validateCurrent])
+  }, [readOnly, toggleLabel, session?.allowMultiple, validateCurrent])
 
   if (!sessionData) notFound()
   if (!session || session.id !== batchId || !currentEl) {
@@ -97,22 +110,25 @@ export default function SessionPage() {
   if (session.taskType === 'bounding_box' && session.dataType === 'image') {
     return (
       <AnnotationShell>
-        <div className="h-full">
-          <BoundingBoxTask
-            imageSrc={currentEl.src}
-            filename={currentEl.filename}
-            index={index}
-            total={total}
-            labels={session.labels}
-            boxes={boundingBoxes}
-            allowSkip={session.allowSkip}
-            onAddBox={addBox}
-            onRemoveBox={removeBox}
-            onValidate={validateCurrent}
-            onSkip={skipCurrent}
-            onPrev={goPrev}
-            onNext={goNext}
-          />
+        <div className="flex h-full flex-col">
+          {readOnly && <ReadOnlyBanner />}
+          <div className="flex-1 min-h-0">
+            <BoundingBoxTask
+              imageSrc={currentEl.src}
+              filename={currentEl.filename}
+              index={index}
+              total={total}
+              labels={session.labels}
+              boxes={boundingBoxes}
+              allowSkip={session.allowSkip}
+              onAddBox={readOnly ? noop : addBox}
+              onRemoveBox={readOnly ? noop : removeBox}
+              onValidate={readOnly ? noop : validateCurrent}
+              onSkip={readOnly ? noop : skipCurrent}
+              onPrev={goPrev}
+              onNext={goNext}
+            />
+          </div>
         </div>
       </AnnotationShell>
     )
@@ -133,30 +149,47 @@ export default function SessionPage() {
             pendingSelection={pendingSelection}
             onPrev={goPrev}
             onNext={goNext}
-            onTextSelect={setPendingSelection}
+            onTextSelect={readOnly ? noop : setPendingSelection}
           />
         </div>
 
         <div className="w-full md:w-72 lg:w-80 shrink-0 overflow-y-auto bg-white dark:bg-zinc-900">
-          <TaskPane
-            session={session}
-            selectedLabelIds={selectedLabelIds}
-            spans={spans}
-            pendingSelection={pendingSelection}
-            transcriptionValue={transcriptionValue}
-            onToggleLabel={handleToggleLabel}
-            onValidate={validateCurrent}
-            onSkip={skipCurrent}
-            onLabelSelect={applyLabelToSelection}
-            onRemoveSpan={removeSpan}
-            onClearPending={() => setPendingSelection(null)}
-            onTranscriptionChange={setTranscriptionValue}
-          />
-          <CommentField />
+          {readOnly && <ReadOnlyBanner />}
+          <div
+            aria-disabled={readOnly}
+            className={readOnly ? 'pointer-events-none select-none opacity-60' : ''}
+          >
+            <TaskPane
+              session={session}
+              selectedLabelIds={selectedLabelIds}
+              spans={spans}
+              pendingSelection={pendingSelection}
+              transcriptionValue={transcriptionValue}
+              onToggleLabel={handleToggleLabel}
+              onValidate={readOnly ? noop : validateCurrent}
+              onSkip={readOnly ? noop : skipCurrent}
+              onLabelSelect={readOnly ? noop : applyLabelToSelection}
+              onRemoveSpan={readOnly ? noop : removeSpan}
+              onClearPending={readOnly ? noop : () => setPendingSelection(null)}
+              onTranscriptionChange={readOnly ? noop : setTranscriptionValue}
+            />
+            <CommentField readOnly={readOnly} />
+          </div>
         </div>
 
       </div>
     </AnnotationShell>
+  )
+}
+
+// ─── ReadOnlyBanner ───────────────────────────────────────────────────────────
+
+function ReadOnlyBanner() {
+  return (
+    <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[11px] font-medium text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
+      <Eye className="h-3.5 w-3.5 shrink-0" />
+      Lecture seule : ce groupe n'est pas assigné à vous.
+    </div>
   )
 }
 
@@ -181,7 +214,6 @@ function ViewerPane({
 
   switch (session.dataType) {
     case 'image':
-      // ImageViewer convient pour bounding_box ET captioning
       return <ImageViewer key={element.id} {...commonProps} src={element.src} />
 
     case 'audio':
@@ -212,7 +244,7 @@ function ViewerPane({
       return <CsvViewer  key={element.id} {...commonProps} content={element.src} targetColumn={session.targetField} />
 
     case 'json':
-      return <JsonViewer key={element.id} {...commonProps} content={element.src} targetField={session.targetField}  />
+      return <JsonViewer key={element.id} {...commonProps} content={element.src} targetField={session.targetField} />
   }
 }
 
@@ -277,12 +309,10 @@ function TaskPane({
           onClearPending={onClearPending}
         />
       )
-
-    // ── NOUVEAU ──────────────────────────────────────────────────────────────
     case 'captioning':
       return (
         <CaptioningTask
-          value={transcriptionValue}          // réutilise le même champ du store
+          value={transcriptionValue}
           allowSkip={session.allowSkip}
           language={session.transcriptionLanguage}
           onChange={onTranscriptionChange}
@@ -290,8 +320,6 @@ function TaskPane({
           onSkip={onSkip}
         />
       )
-    // ─────────────────────────────────────────────────────────────────────────
-
     case 'bounding_box':
       return (
         <div className="flex items-center justify-center h-full text-sm text-zinc-400 p-4">
@@ -305,7 +333,7 @@ function TaskPane({
 
 // ─── CommentField ─────────────────────────────────────────────────────────────
 
-function CommentField() {
+function CommentField({ readOnly }: { readOnly: boolean }) {
   const comment    = useAnnotationStore(s => s.annotationComment)
   const setComment = useAnnotationStore(s => s.setAnnotationComment)
   return (
@@ -315,7 +343,8 @@ function CommentField() {
       </p>
       <textarea
         value={comment}
-        onChange={e => setComment(e.target.value)}
+        onChange={e => { if (!readOnly) setComment(e.target.value) }}
+        readOnly={readOnly}
         placeholder="Remarque sur cet élément..."
         rows={2}
         className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-700 dark:text-zinc-300 px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-zinc-400 placeholder:text-zinc-300 dark:placeholder:text-zinc-600"

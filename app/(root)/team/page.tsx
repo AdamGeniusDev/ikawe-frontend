@@ -234,7 +234,7 @@ function TeamsListView({ teams, pending, collaborators, onSelectTeam, onCreerEqu
   onAnnulerInvitation: (id: string) => void
   onAddToTeam:         (user: User) => void
 }) {
-  const totalMembers     = teams.reduce((a, t) => a + t.members.length, 0)
+  const totalMembers     = [...new Set (teams.flatMap(t => t.members.map(m=> m.userId)))].length;
   const totalAnnotations = teams.reduce((a, t) => a + t.members.reduce((b, m) => b + m.annotations, 0), 0)
   const totalDatasets    = new Set(teams.flatMap(t => t.datasetIds)).size
 
@@ -577,7 +577,7 @@ export default function TeamPage() {
     ))
   }
 
-  // Ajouter un collaborateur à UNE équipe choisie (depuis vue liste)
+  // Ajouter un collaborateur à une équipe choisie (depuis vue liste)
   const handleAjouterAEquipe = (user: User, teamId: string, role: TeamRole) => {
     setTeams(prev => prev.map(t =>
       t.id !== teamId ? t : {

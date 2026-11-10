@@ -15,8 +15,9 @@ import {
 import { MOCK_USERS } from '@/types/user'
 import { AnnotationJob, BATCH_STATUS_META, resolveBatchUserRole, type AnnotationBatch } from '@/types/annotation'
 import { resolveBatchCTA } from '@/lib/batch-cta'
+import { CURRENT_USER } from '@/constants/mock-data'
 
-const CURRENT_USER = MOCK_USERS[0]
+
 
 const TASK_LABEL: Record<string, string> = {
   classification: 'Classification',
@@ -43,7 +44,7 @@ function GroupCard({ batch, canAnnotate, job }: {
   const isDone   = batch.status === 'completed'
   const p        = batch.progress
   const role     = resolveBatchUserRole(batch, CURRENT_USER.id, job.createdBy)
-  const cta      = resolveBatchCTA(batch.id, batch.status, role)
+  const cta      = resolveBatchCTA(job.id,batch.id, batch.status, role)
   const router   = useRouter()
 
   const assigneeNames = batch.assignedTo
